@@ -56,13 +56,21 @@ export async function signUp(email: string, username: string, password: string):
       }
     }
 
+    // First, get the hashed password using the hash_password RPC function
+    const { data: hashedPassword, error: hashError } = await supabase.rpc('hash_password', { password });
+    
+    if (hashError) {
+      console.error('Error hashing password:', hashError);
+      throw new Error(hashError.message);
+    }
+
     // Insert new user with hashed password
     const { data: newUser, error: insertError } = await supabase
       .from('users')
       .insert({
         email,
         username,
-        password: await supabase.rpc('hash_password', { password })
+        password: hashedPassword
       })
       .select('id, email, username')
       .single();
