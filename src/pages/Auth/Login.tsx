@@ -11,18 +11,20 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
     
     try {
       await login(email, password);
       navigate('/');
     } catch (error) {
-      // Error is already handled in the context
+      setError(error instanceof Error ? error.message : 'An error occurred during login');
       console.error(error);
     } finally {
       setIsLoading(false);
@@ -47,14 +49,20 @@ const Login: React.FC = () => {
           
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="p-3 text-sm bg-red-900/50 border border-red-800 rounded-md text-red-200">
+                  {error}
+                </div>
+              )}
+              
               <div className="space-y-2">
                 <label htmlFor="email" className="block text-sm font-medium">
-                  Email
+                  Email or Username
                 </label>
                 <Input
                   id="email"
-                  type="email"
-                  placeholder="your@email.com"
+                  type="text"
+                  placeholder="Email or username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="bg-black border-gray-700"

@@ -2,13 +2,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { User } from '@/types';
+import { signIn, signUp } from '@/utils/customAuth';
 
 interface AuthContextProps {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  signup: (email: string, username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -32,17 +33,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsLoading(true);
       
-      // This is a mock authentication
-      // In a real app, you would call your authentication API
-      if (email && password) {
-        const mockUser: User = {
-          id: '1',
-          email,
-          name: email.split('@')[0]
-        };
-        
-        setUser(mockUser);
-        localStorage.setItem('user', JSON.stringify(mockUser));
+      const loggedInUser = await signIn(email, password);
+      
+      if (loggedInUser) {
+        setUser(loggedInUser);
+        localStorage.setItem('user', JSON.stringify(loggedInUser));
         toast({
           title: "Login successful",
           description: "Welcome back!",
@@ -62,26 +57,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (email: string, password: string) => {
+  const signup = async (email: string, username: string, password: string) => {
     try {
       setIsLoading(true);
       
-      // This is a mock signup
-      if (email && password) {
-        const mockUser: User = {
-          id: '1',
-          email,
-          name: email.split('@')[0]
-        };
-        
-        setUser(mockUser);
-        localStorage.setItem('user', JSON.stringify(mockUser));
+      const newUser = await signUp(email, username, password);
+      
+      if (newUser) {
+        setUser(newUser);
+        localStorage.setItem('user', JSON.stringify(newUser));
         toast({
           title: "Account created",
           description: "Welcome to Scrumify Hub!",
         });
       } else {
-        throw new Error('Invalid information');
+        throw new Error('Failed to create account');
       }
     } catch (error) {
       toast({

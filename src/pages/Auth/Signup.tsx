@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const Signup: React.FC = () => {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -28,10 +29,10 @@ const Signup: React.FC = () => {
     setIsLoading(true);
     
     try {
-      await signup(email, password);
+      await signup(email, username, password);
       navigate('/');
     } catch (error) {
-      // Error is already handled in the context
+      setError(error instanceof Error ? error.message : 'An error occurred during signup');
       console.error(error);
     } finally {
       setIsLoading(false);
@@ -56,6 +57,12 @@ const Signup: React.FC = () => {
           
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="p-3 text-sm bg-red-900/50 border border-red-800 rounded-md text-red-200">
+                  {error}
+                </div>
+              )}
+              
               <div className="space-y-2">
                 <label htmlFor="email" className="block text-sm font-medium">
                   Email
@@ -66,6 +73,21 @@ const Signup: React.FC = () => {
                   placeholder="your@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="bg-black border-gray-700"
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label htmlFor="username" className="block text-sm font-medium">
+                  Username
+                </label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="bg-black border-gray-700"
                   required
                 />
@@ -98,8 +120,6 @@ const Signup: React.FC = () => {
                   required
                 />
               </div>
-              
-              {error && <p className="text-red-500 text-sm">{error}</p>}
               
               <Button 
                 type="submit" 
