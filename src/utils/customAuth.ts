@@ -35,26 +35,36 @@ export async function signIn(loginCredential: string, password: string): Promise
 
 export async function signUp(email: string, username: string, password: string): Promise<User | null> {
   try {
-    // Use a parameterized query with .eq instead of string interpolation
-    // which was causing the infinite recursion
-    const { data: existingUsers, error: checkError } = await supabase
+    // Check for existing email
+    const { data: existingEmail, error: emailError } = await supabase
       .from('users')
-      .select('email, username')
-      .or(`email.eq.${email},username.eq.${username}`)
-      .limit(1);
+      .select('email')
+      .eq('email', email)
+      .maybeSingle();
 
-    if (checkError) {
-      console.error('Error checking existing user:', checkError);
-      throw new Error(checkError.message);
+    if (emailError) {
+      console.error('Error checking existing email:', emailError);
+      throw new Error(emailError.message);
     }
 
-    if (existingUsers && existingUsers.length > 0) {
-      if (existingUsers[0].email === email) {
-        throw new Error('Email already in use');
-      }
-      if (existingUsers[0].username === username) {
-        throw new Error('Username already taken');
-      }
+    if (existingEmail) {
+      throw new Error('Email already in use');
+    }
+
+    // Check for existing username
+    const { data: existingUsername, error: usernameError } = await supabase
+      .from('users')
+      .select('username')
+      .eq('username', username)
+      .maybeSingle();
+
+    if (usernameError) {
+      console.error('Error checking existing username:', usernameError);
+      throw new Error(usernameError.message);
+    }
+
+    if (existingUsername) {
+      throw new Error('Username already taken');
     }
 
     // First, get the hashed password using the hash_password RPC function
