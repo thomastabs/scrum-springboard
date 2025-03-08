@@ -35,7 +35,8 @@ export async function signIn(loginCredential: string, password: string): Promise
 
 export async function signUp(email: string, username: string, password: string): Promise<User | null> {
   try {
-    // Check if user already exists
+    // Use a parameterized query with .eq instead of string interpolation
+    // which was causing the infinite recursion
     const { data: existingUsers, error: checkError } = await supabase
       .from('users')
       .select('email, username')
