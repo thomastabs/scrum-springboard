@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
@@ -206,25 +207,16 @@ const SprintBoard: React.FC = () => {
     if (!sprint) return;
     
     try {
-      if (sprint.status === "completed" as "planned" | "in-progress" | "completed") {
+      if (sprint.status === "completed") {
         toast.info("Sprint is already completed");
         return;
       }
       
-      await updateSprint(sprintId, {
+      await updateSprint(sprint.id, {
         status: "completed",
       });
       
       toast.success("Sprint marked as completed");
-      
-      if (sprint) {
-        setSprint({
-          ...sprint,
-          status: "completed",
-        });
-      }
-      
-      setIsSprintCompleted(true);
     } catch (error) {
       console.error("Error completing sprint:", error);
       toast.error("Failed to complete sprint");
