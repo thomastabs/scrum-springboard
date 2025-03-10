@@ -8,6 +8,9 @@ import { toast } from "sonner";
 import TaskCard from "@/components/tasks/TaskCard";
 import EditTaskModal from "@/components/tasks/EditTaskModal";
 import AddColumnModal from "@/components/sprints/AddColumnModal";
+import { Sprint } from "@/types";
+import { Project } from "@/types";
+import { Task } from "@/types";
 
 const SprintBoard: React.FC = () => {
   const { sprintId, projectId } = useParams<{ sprintId: string, projectId?: string }>();
