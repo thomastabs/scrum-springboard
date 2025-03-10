@@ -237,6 +237,8 @@ const SprintBoard: React.FC = () => {
     );
   }
   
+  // Use type assertion to help TypeScript narrow the type
+  const sprintStatus = sprint.status as 'planned' | 'in-progress' | 'completed';
   const allTasksCompleted = tasks.length > 0 && tasks.every(task => task.status === "done");
   
   const handleEditSprint = () => {
@@ -253,7 +255,7 @@ const SprintBoard: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold">{sprint.title}</h2>
-            {sprint.status === "completed" && (
+            {sprintStatus === "completed" && (
               <span className="bg-success text-white text-xs px-2 py-1 rounded-full">
                 Completed
               </span>
@@ -263,7 +265,7 @@ const SprintBoard: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-2">
-          {sprint.status !== "completed" && (
+          {sprintStatus !== "completed" && (
             <>
               <button
                 onClick={handleEditSprint}
@@ -276,7 +278,7 @@ const SprintBoard: React.FC = () => {
               <button
                 onClick={handleCompleteButtonClick}
                 className={`scrum-button ${allTasksCompleted ? "bg-success hover:bg-success/90" : ""}`}
-                disabled={sprint.status === "completed"}
+                disabled={sprintStatus === "completed"}
               >
                 Complete Sprint
               </button>
@@ -292,7 +294,7 @@ const SprintBoard: React.FC = () => {
           <button
             onClick={() => setIsAddColumnModalOpen(true)}
             className="scrum-button-secondary flex items-center gap-1 text-sm"
-            disabled={sprint.status === "completed"}
+            disabled={sprintStatus === "completed"}
           >
             <Plus className="h-4 w-4" />
             <span>Add Column</span>
@@ -317,7 +319,7 @@ const SprintBoard: React.FC = () => {
                   <div className="flex items-center justify-between p-3 border-b border-scrum-border">
                     <h4 className="font-medium text-sm">{column.title}</h4>
                     <div className="flex items-center">
-                      {sprint.status !== "completed" && (
+                      {sprintStatus !== "completed" && (
                         <button
                           onClick={() => handleCreateTaskInColumn(columnId)}
                           className="text-scrum-text-secondary hover:text-white transition-colors mr-2"
@@ -331,7 +333,7 @@ const SprintBoard: React.FC = () => {
                         <button
                           onClick={() => handleRemoveColumn(columnId)}
                           className="text-scrum-text-secondary hover:text-destructive transition-colors"
-                          disabled={sprint.status === "completed"}
+                          disabled={sprintStatus === "completed"}
                           title="Remove column"
                         >
                           <Trash className="h-4 w-4" />
@@ -340,7 +342,7 @@ const SprintBoard: React.FC = () => {
                     </div>
                   </div>
                   
-                  <Droppable droppableId={columnId} isDropDisabled={sprint.status === "completed"}>
+                  <Droppable droppableId={columnId} isDropDisabled={sprintStatus === "completed"}>
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
@@ -353,7 +355,7 @@ const SprintBoard: React.FC = () => {
                               key={task.id}
                               draggableId={task.id}
                               index={index}
-                              isDragDisabled={sprint.status === "completed"}
+                              isDragDisabled={sprintStatus === "completed"}
                             >
                               {(provided, snapshot) => (
                                 <div
@@ -365,7 +367,7 @@ const SprintBoard: React.FC = () => {
                                   <TaskCard
                                     task={task}
                                     onEdit={() => setEditingTask(task.id)}
-                                    isSprintCompleted={sprint.status === "completed"}
+                                    isSprintCompleted={sprintStatus === "completed"}
                                   />
                                 </div>
                               )}
@@ -402,6 +404,7 @@ const SprintBoard: React.FC = () => {
           <div className="bg-scrum-card border border-scrum-border rounded-lg p-6 w-full max-w-lg animate-fade-up">
             <NewTaskForm 
               sprintId={sprint.id}
+              projectId={sprint.projectId} // Pass the project ID from the sprint
               initialStatus={creatingTaskInColumn}
               onClose={() => setCreatingTaskInColumn(null)}
             />
@@ -414,9 +417,10 @@ const SprintBoard: React.FC = () => {
 
 const NewTaskForm: React.FC<{
   sprintId: string;
+  projectId: string; // Add projectId as a required prop
   initialStatus: string;
   onClose: () => void;
-}> = ({ sprintId, initialStatus, onClose }) => {
+}> = ({ sprintId, projectId, initialStatus, onClose }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "">("");
@@ -438,6 +442,7 @@ const NewTaskForm: React.FC<{
         title,
         description,
         sprintId,
+        projectId, // Pass the projectId to the addTask function
         status: initialStatus as any,
         assignedTo: assignedTo || undefined,
         priority: priority || undefined,
