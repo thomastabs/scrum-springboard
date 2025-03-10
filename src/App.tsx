@@ -4,100 +4,101 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "@/context/AuthContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ProjectProvider } from "@/context/ProjectContext";
-import { useAuth } from "@/context/AuthContext";
 
 // Pages
 import Login from "./pages/Auth/Login";
-import Signup from "./pages/Auth/Signup";
+import Register from "./pages/Auth/Register";
 import Dashboard from "./pages/Dashboard";
-import ProjectDetails from "./pages/Project/ProjectDetails";
-import SprintList from "./pages/Project/SprintList";
-import ProductBacklog from "./pages/Project/ProductBacklog";
-import ProjectTimeline from "./pages/Project/ProjectTimeline";
-import ProjectBurndown from "./pages/Project/ProjectBurndown";
-import SprintForm from "./pages/Project/SprintForm";
+import Projects from "./pages/Projects";
+import ProjectLayout from "./components/layout/ProjectLayout";
+import ProjectDetail from "./pages/ProjectDetail";
+import BurndownChart from "./pages/BurndownChart";
+import SprintBoard from "./pages/SprintBoard";
+import EditSprint from "./pages/EditSprint";
+import ProjectTimeline from "./pages/ProjectTimeline";
 import NotFound from "./pages/NotFound";
+import ProductBacklog from "./pages/ProductBacklog";
 
 const queryClient = new QueryClient();
 
-// Private route wrapper
-const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
+// Protected route component
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
   
   if (isLoading) {
-    return <div className="min-h-screen bg-black flex items-center justify-center">
-      <p className="text-white">Loading...</p>
-    </div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse">Loading...</div>
+      </div>
+    );
   }
   
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+  
+  return <>{children}</>;
 };
 
-const AppRoutes = () => {
-  const { isAuthenticated } = useAuth();
+// Public route that redirects to dashboard if authenticated
+const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, isLoading } = useAuth();
   
-  return (
-    <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={
-        isAuthenticated ? <Navigate to="/" /> : <Login />
-      } />
-      <Route path="/signup" element={
-        isAuthenticated ? <Navigate to="/" /> : <Signup />
-      } />
-      
-      {/* Private routes */}
-      <Route path="/" element={
-        <PrivateRoute>
-          <Dashboard />
-        </PrivateRoute>
-      } />
-      
-      <Route path="/projects/:projectId" element={
-        <PrivateRoute>
-          <ProjectDetails />
-        </PrivateRoute>
-      }>
-        <Route index element={<SprintList />} />
-        <Route path="sprints" element={<SprintList />} />
-        <Route path="backlog" element={<ProductBacklog />} />
-        <Route path="timeline" element={<ProjectTimeline />} />
-        <Route path="burndown" element={<ProjectBurndown />} />
-      </Route>
-      
-      <Route path="/projects/:projectId/new-sprint" element={
-        <PrivateRoute>
-          <SprintForm />
-        </PrivateRoute>
-      } />
-      
-      <Route path="/projects/:projectId/sprints/:sprintId/edit" element={
-        <PrivateRoute>
-          <SprintForm />
-        </PrivateRoute>
-      } />
-      
-      {/* 404 route */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  );
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse">Loading...</div>
+      </div>
+    );
+  }
+  
+  if (isAuthenticated) {
+    return <Navigate to="/" />;
+  }
+  
+  return <>{children}</>;
 };
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <AuthProvider>
-        <ProjectProvider>
+    <AuthProvider>
+      <ProjectProvider>
+        <TooltipProvider>
           <Toaster />
-          <Sonner position="top-right" theme="dark" />
+          <Sonner />
           <BrowserRouter>
-            <AppRoutes />
+            <Routes>
+              {/* Public routes */}
+              <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+              <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+              
+              {/* Protected routes */}
+              <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+              <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+              <Route path="/collaborations" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+              
+              {/* Project routes */}
+              <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectLayout /></ProtectedRoute>}>
+                <Route index element={<ProjectDetail />} />
+                <Route path="backlog" element={<ProductBacklog />} />
+                <Route path="timeline" element={<ProjectTimeline />} />
+                <Route path="burndown" element={<BurndownChart />} />
+                <Route path="sprint/:sprintId" element={<SprintBoard />} />
+                <Route path="sprint/:sprintId/edit" element={<EditSprint />} />
+              </Route>
+              
+              {/* Sprint routes */}
+              <Route path="/sprints/:sprintId" element={<ProtectedRoute><SprintBoard /></ProtectedRoute>} />
+              
+              {/* 404 route */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
           </BrowserRouter>
-        </ProjectProvider>
-      </AuthProvider>
-    </TooltipProvider>
+        </TooltipProvider>
+      </ProjectProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

@@ -1,97 +1,122 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useToast } from "@/hooks/use-toast";
-import { User } from '@/types';
-import { signIn, signUp } from '@/utils/customAuth';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { User } from "@/types";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
-interface AuthContextProps {
+interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, username: string, password: string) => Promise<void>;
+  login: (emailOrUsername: string, password: string) => Promise<void>;
+  register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextProps | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  isAuthenticated: false,
+  isLoading: true,
+  login: async () => {},
+  register: async () => {},
+  logout: () => {},
+});
+
+export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
-  
+
   useEffect(() => {
-    // Check for stored user on mount
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+    // Check for saved user in localStorage
+    const savedUser = localStorage.getItem("scrumUser");
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
     }
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const register = async (username: string, email: string, password: string) => {
     try {
-      setIsLoading(true);
-      
-      const loggedInUser = await signIn(email, password);
-      
-      if (loggedInUser) {
-        setUser(loggedInUser);
-        localStorage.setItem('user', JSON.stringify(loggedInUser));
-        toast({
-          title: "Login successful",
-          description: "Welcome back!",
-        });
-      } else {
-        throw new Error('Invalid credentials');
+      // Check if email already exists
+      const { data: existingEmail } = await supabase
+        .from('users')
+        .select('email')
+        .eq('email', email)
+        .single();
+
+      if (existingEmail) {
+        throw new Error('Email already in use');
       }
-    } catch (error) {
-      toast({
-        title: "Login failed",
-        description: error instanceof Error ? error.message : "Please check your credentials",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setIsLoading(false);
+
+      // Check if username already exists
+      const { data: existingUsername } = await supabase
+        .from('users')
+        .select('username')
+        .eq('username', username)
+        .single();
+
+      if (existingUsername) {
+        throw new Error('Username already taken');
+      }
+
+      // Insert new user
+      const { data, error } = await supabase
+        .from('users')
+        .insert([{ username, email, password }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        const newUser: User = {
+          id: data.id,
+          email: data.email,
+          username: data.username,
+        };
+        
+        setUser(newUser);
+        localStorage.setItem("scrumUser", JSON.stringify(newUser));
+      }
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      throw new Error(error.message || 'Failed to register');
     }
   };
 
-  const signup = async (email: string, username: string, password: string) => {
+  const login = async (emailOrUsername: string, password: string) => {
     try {
-      setIsLoading(true);
-      
-      const newUser = await signUp(email, username, password);
-      
-      if (newUser) {
-        setUser(newUser);
-        localStorage.setItem('user', JSON.stringify(newUser));
-        toast({
-          title: "Account created",
-          description: "Welcome to Scrumify Hub!",
-        });
-      } else {
-        throw new Error('Failed to create account');
+      // Try to find user by email or username
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .or(`email.eq.${emailOrUsername},username.eq.${emailOrUsername}`)
+        .eq('password', password)
+        .single();
+
+      if (error || !data) {
+        throw new Error('Invalid credentials');
       }
-    } catch (error) {
-      toast({
-        title: "Signup failed",
-        description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
-      });
-      throw error;
-    } finally {
-      setIsLoading(false);
+
+      const loggedInUser: User = {
+        id: data.id,
+        email: data.email,
+        username: data.username,
+      };
+      
+      setUser(loggedInUser);
+      localStorage.setItem("scrumUser", JSON.stringify(loggedInUser));
+    } catch (error: any) {
+      console.error('Login error:', error);
+      throw new Error('Invalid credentials');
     }
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('user');
-    toast({
-      title: "Logged out",
-      description: "You have been logged out successfully",
-    });
+    localStorage.removeItem("scrumUser");
   };
 
   return (
@@ -101,19 +126,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         isLoading,
         login,
-        signup,
-        logout
+        register,
+        logout,
       }}
     >
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 };

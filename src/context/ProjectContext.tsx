@@ -1,260 +1,626 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Project, Sprint, Task, BurndownData } from '@/types';
-import { useToast } from "@/hooks/use-toast";
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { Project, Sprint, Task, BurndownData } from "@/types";
+import { useAuth } from "./AuthContext";
+import { supabase } from "@/lib/supabase";
 
-interface ProjectContextProps {
+interface ProjectContextType {
   projects: Project[];
   sprints: Sprint[];
   tasks: Task[];
-  addProject: (project: Omit<Project, 'id' | 'createdAt'>) => void;
+  burndownData: Record<string, BurndownData[]>;
+  addProject: (project: Omit<Project, "id" | "createdAt" | "updatedAt">) => Promise<Project>;
   getProject: (id: string) => Project | undefined;
-  updateProject: (id: string, updates: Partial<Project>) => void;
-  deleteProject: (id: string) => void;
-  addSprint: (sprint: Omit<Sprint, 'id'>) => void;
+  updateProject: (id: string, project: Partial<Omit<Project, "id">>) => Promise<Project>;
+  deleteProject: (id: string) => Promise<void>;
+  addSprint: (sprint: Omit<Sprint, "id">) => Promise<Sprint>;
   getSprint: (id: string) => Sprint | undefined;
+  updateSprint: (id: string, sprint: Partial<Omit<Sprint, "id">>) => Promise<Sprint>;
+  deleteSprint: (id: string) => Promise<void>;
   getSprintsByProject: (projectId: string) => Sprint[];
-  updateSprint: (id: string, updates: Partial<Sprint>) => void;
-  deleteSprint: (id: string) => void;
-  addTask: (task: Omit<Task, 'id'>) => void;
-  getTasksBySprintId: (sprintId: string) => Task[];
-  updateTask: (id: string, updates: Partial<Task>) => void;
-  deleteTask: (id: string) => void;
+  addTask: (task: Omit<Task, "id" | "createdAt" | "updatedAt">) => Promise<Task>;
+  getTask: (id: string) => Task | undefined;
+  updateTask: (id: string, task: Partial<Omit<Task, "id">>) => Promise<Task>;
+  deleteTask: (id: string) => Promise<void>;
+  getTasksBySprint: (sprintId: string) => Task[];
   getBurndownData: (projectId: string) => BurndownData[];
 }
 
-const ProjectContext = createContext<ProjectContextProps | undefined>(undefined);
+const ProjectContext = createContext<ProjectContextType>({
+  projects: [],
+  sprints: [],
+  tasks: [],
+  burndownData: {},
+  addProject: async () => ({ id: "", title: "", description: "", createdAt: "", updatedAt: "" }),
+  getProject: () => undefined,
+  updateProject: async () => ({ id: "", title: "", description: "", createdAt: "", updatedAt: "" }),
+  deleteProject: async () => {},
+  addSprint: async () => ({ id: "", title: "", description: "", projectId: "", startDate: "", endDate: "", status: "planned" }),
+  getSprint: () => undefined,
+  updateSprint: async () => ({ id: "", title: "", description: "", projectId: "", startDate: "", endDate: "", status: "planned" }),
+  deleteSprint: async () => {},
+  getSprintsByProject: () => [],
+  addTask: async () => ({ id: "", title: "", sprintId: "", status: "todo", createdAt: "", updatedAt: "" }),
+  getTask: () => undefined,
+  updateTask: async () => ({ id: "", title: "", sprintId: "", status: "todo", createdAt: "", updatedAt: "" }),
+  deleteTask: async () => {},
+  getTasksBySprint: () => [],
+  getBurndownData: () => [],
+});
+
+export const useProjects = () => useContext(ProjectContext);
 
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const { toast } = useToast();
+  const [burndownData, setBurndownData] = useState<Record<string, BurndownData[]>>({});
 
   useEffect(() => {
-    // Load data from localStorage on mount
-    const storedProjects = localStorage.getItem('projects');
-    const storedSprints = localStorage.getItem('sprints');
-    const storedTasks = localStorage.getItem('tasks');
+    if (user) {
+      fetchProjects();
+    } else {
+      setProjects([]);
+      setSprints([]);
+      setTasks([]);
+      setBurndownData({});
+    }
+  }, [user]);
 
-    if (storedProjects) setProjects(JSON.parse(storedProjects));
-    if (storedSprints) setSprints(JSON.parse(storedSprints));
-    if (storedTasks) setTasks(JSON.parse(storedTasks));
-    
-    // Add sample data if none exists
-    if (!storedProjects) {
-      const sampleProject: Project = {
-        id: '1',
-        name: 'Teste1',
-        description: 'Testeeeeeeee',
-        endGoal: 'Talvez testarrrrr',
-        createdAt: '3/6/2025',
-        owner: '1'
+  const fetchProjects = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('owner_id', user.id);
+
+      if (error) {
+        console.error('Error fetching projects:', error);
+        return;
+      }
+
+      if (data) {
+        const formattedProjects: Project[] = data.map(project => ({
+          id: project.id,
+          title: project.title,
+          description: project.description || '',
+          endGoal: project.end_goal,
+          createdAt: project.created_at,
+          updatedAt: project.updated_at
+        }));
+
+        setProjects(formattedProjects);
+        
+        formattedProjects.forEach(project => {
+          fetchSprints(project.id);
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
+
+  const fetchSprints = async (projectId: string) => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('sprints')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching sprints:', error);
+        return;
+      }
+
+      if (data) {
+        const formattedSprints: Sprint[] = data.map(sprint => ({
+          id: sprint.id,
+          title: sprint.title,
+          description: sprint.description || '',
+          projectId: sprint.project_id,
+          startDate: sprint.start_date,
+          endDate: sprint.end_date,
+          status: sprint.status as 'planned' | 'in-progress' | 'completed'
+        }));
+
+        setSprints(prev => {
+          const filtered = prev.filter(s => s.projectId !== projectId);
+          return [...filtered, ...formattedSprints];
+        });
+        
+        formattedSprints.forEach(sprint => {
+          fetchTasksBySprint(sprint.id);
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching sprints:', error);
+    }
+  };
+
+  const fetchTasksBySprint = async (sprintId: string) => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('sprint_id', sprintId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error fetching tasks for sprint:', error);
+        return;
+      }
+
+      if (data) {
+        const formattedTasks: Task[] = data.map(task => ({
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          sprintId: task.sprint_id || '',
+          status: task.status as 'todo' | 'in-progress' | 'review' | 'done',
+          assignedTo: task.assign_to,
+          storyPoints: task.story_points,
+          createdAt: task.created_at,
+          updatedAt: task.created_at
+        }));
+
+        setTasks(prev => {
+          const filtered = prev.filter(t => t.sprintId !== sprintId);
+          return [...filtered, ...formattedTasks];
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    }
+  };
+
+  const generateId = () => `id-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+  const addProject = async (project: Omit<Project, "id" | "createdAt" | "updatedAt">) => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .insert([{
+          title: project.title,
+          description: project.description,
+          end_goal: project.endGoal,
+          owner_id: user.id
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (!data) throw new Error('Failed to create project');
+
+      const newProject: Project = {
+        id: data.id,
+        title: data.title,
+        description: data.description || '',
+        endGoal: data.end_goal,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at
       };
-      setProjects([sampleProject]);
-      localStorage.setItem('projects', JSON.stringify([sampleProject]));
+
+      setProjects(prev => [...prev, newProject]);
+      
+      setBurndownData(prev => ({
+        ...prev,
+        [newProject.id]: generateDefaultBurndownData(),
+      }));
+      
+      return newProject;
+    } catch (error) {
+      console.error('Error adding project:', error);
+      throw error;
     }
-  }, []);
-
-  // Save to localStorage whenever data changes
-  useEffect(() => {
-    localStorage.setItem('projects', JSON.stringify(projects));
-  }, [projects]);
-
-  useEffect(() => {
-    localStorage.setItem('sprints', JSON.stringify(sprints));
-  }, [sprints]);
-
-  useEffect(() => {
-    localStorage.setItem('tasks', JSON.stringify(tasks));
-  }, [tasks]);
-
-  const addProject = (project: Omit<Project, 'id' | 'createdAt'>) => {
-    const newProject: Project = {
-      ...project,
-      id: Date.now().toString(),
-      createdAt: new Date().toLocaleDateString()
-    };
-    
-    setProjects(prev => [...prev, newProject]);
-    toast({
-      title: "Project created",
-      description: "Your new project has been created successfully"
-    });
   };
 
-  const getProject = (id: string) => {
-    return projects.find(project => project.id === id);
-  };
+  const getProject = (id: string) => projects.find((p) => p.id === id);
 
-  const updateProject = (id: string, updates: Partial<Project>) => {
-    setProjects(prev => 
-      prev.map(project => 
-        project.id === id ? { ...project, ...updates } : project
-      )
-    );
-    toast({
-      title: "Project updated",
-      description: "The project has been updated successfully"
-    });
-  };
+  const updateProject = async (id: string, project: Partial<Omit<Project, "id">>) => {
+    if (!user) throw new Error('User not authenticated');
 
-  const deleteProject = (id: string) => {
-    setProjects(prev => prev.filter(project => project.id !== id));
-    // Also delete associated sprints and tasks
-    const projectSprintIds = sprints
-      .filter(sprint => sprint.projectId === id)
-      .map(sprint => sprint.id);
-    
-    setSprints(prev => prev.filter(sprint => sprint.projectId !== id));
-    setTasks(prev => prev.filter(task => !projectSprintIds.includes(task.sprintId)));
-    
-    toast({
-      title: "Project deleted",
-      description: "The project and all associated data have been deleted"
-    });
-  };
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          title: project.title,
+          description: project.description,
+          end_goal: project.endGoal,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .eq('owner_id', user.id);
 
-  const addSprint = (sprint: Omit<Sprint, 'id'>) => {
-    const newSprint: Sprint = {
-      ...sprint,
-      id: Date.now().toString()
-    };
-    
-    setSprints(prev => [...prev, newSprint]);
-    toast({
-      title: "Sprint created",
-      description: "Your new sprint has been created successfully"
-    });
-  };
+      if (error) throw error;
 
-  const getSprint = (id: string) => {
-    return sprints.find(sprint => sprint.id === id);
-  };
+      const updatedProject = {
+        ...projects.find((p) => p.id === id)!,
+        ...project,
+        updatedAt: new Date().toISOString(),
+      };
 
-  const getSprintsByProject = (projectId: string) => {
-    return sprints.filter(sprint => sprint.projectId === projectId);
-  };
-
-  const updateSprint = (id: string, updates: Partial<Sprint>) => {
-    setSprints(prev => 
-      prev.map(sprint => 
-        sprint.id === id ? { ...sprint, ...updates } : sprint
-      )
-    );
-    toast({
-      title: "Sprint updated",
-      description: "The sprint has been updated successfully"
-    });
-  };
-
-  const deleteSprint = (id: string) => {
-    setSprints(prev => prev.filter(sprint => sprint.id !== id));
-    // Also delete associated tasks
-    setTasks(prev => prev.filter(task => task.sprintId !== id));
-    
-    toast({
-      title: "Sprint deleted",
-      description: "The sprint and all associated tasks have been deleted"
-    });
-  };
-
-  const addTask = (task: Omit<Task, 'id'>) => {
-    const newTask: Task = {
-      ...task,
-      id: Date.now().toString()
-    };
-    
-    setTasks(prev => [...prev, newTask]);
-    toast({
-      title: "Task created",
-      description: "Your new task has been created successfully"
-    });
-  };
-
-  const getTasksBySprintId = (sprintId: string) => {
-    return tasks.filter(task => task.sprintId === sprintId);
-  };
-
-  const updateTask = (id: string, updates: Partial<Task>) => {
-    setTasks(prev => 
-      prev.map(task => 
-        task.id === id ? { ...task, ...updates } : task
-      )
-    );
-    toast({
-      title: "Task updated",
-      description: "The task has been updated successfully"
-    });
-  };
-
-  const deleteTask = (id: string) => {
-    setTasks(prev => prev.filter(task => task.id !== id));
-    toast({
-      title: "Task deleted",
-      description: "The task has been deleted successfully"
-    });
-  };
-
-  const getBurndownData = (projectId: string): BurndownData[] => {
-    // In a real app, this would calculate real burndown data
-    // For now, we'll return mock data for demonstration
-    const projectSprints = sprints.filter(sprint => sprint.projectId === projectId);
-    
-    if (projectSprints.length === 0) {
-      return [];
+      setProjects(prev => prev.map(p => p.id === id ? updatedProject : p));
+      
+      return updatedProject;
+    } catch (error) {
+      console.error('Error updating project:', error);
+      throw error;
     }
+  };
+
+  const deleteProject = async (id: string) => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      // First, get all sprints for this project
+      const projectSprints = sprints.filter(s => s.projectId === id);
+      const sprintIds = projectSprints.map(s => s.id);
+      
+      // Then delete all tasks related to these sprints
+      if (sprintIds.length > 0) {
+        // Delete tasks associated with the sprints
+        const { error: tasksError } = await supabase
+          .from('tasks')
+          .delete()
+          .in('sprint_id', sprintIds)
+          .eq('user_id', user.id);
+          
+        if (tasksError) {
+          console.error('Error deleting tasks:', tasksError);
+          throw tasksError;
+        }
+        
+        // Delete all sprints for this project
+        const { error: sprintsError } = await supabase
+          .from('sprints')
+          .delete()
+          .eq('project_id', id)
+          .eq('user_id', user.id);
+          
+        if (sprintsError) {
+          console.error('Error deleting sprints:', sprintsError);
+          throw sprintsError;
+        }
+      }
+      
+      // Finally delete the project
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', id)
+        .eq('owner_id', user.id);
+
+      if (error) throw error;
+
+      setProjects(prev => prev.filter(p => p.id !== id));
+      setSprints(prev => prev.filter(s => s.projectId !== id));
+      setTasks(prev => prev.filter(t => !sprintIds.includes(t.sprintId)));
+      
+      setBurndownData(prev => {
+        const newData = { ...prev };
+        delete newData[id];
+        return newData;
+      });
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      throw error;
+    }
+  };
+
+  const addSprint = async (sprint: Omit<Sprint, "id">) => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      const { data, error } = await supabase
+        .from('sprints')
+        .insert([{
+          title: sprint.title,
+          description: sprint.description,
+          project_id: sprint.projectId,
+          start_date: sprint.startDate,
+          end_date: sprint.endDate,
+          status: sprint.status,
+          user_id: user.id
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (!data) throw new Error('Failed to create sprint');
+
+      const newSprint: Sprint = {
+        id: data.id,
+        title: data.title,
+        description: data.description || '',
+        projectId: data.project_id,
+        startDate: data.start_date,
+        endDate: data.end_date,
+        status: data.status as 'planned' | 'in-progress' | 'completed'
+      };
+
+      setSprints(prev => [...prev, newSprint]);
+      
+      return newSprint;
+    } catch (error) {
+      console.error('Error adding sprint:', error);
+      throw error;
+    }
+  };
+
+  const getSprint = (id: string) => sprints.find((s) => s.id === id);
+
+  const updateSprint = async (id: string, sprint: Partial<Omit<Sprint, "id">>) => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('sprints')
+        .update({
+          title: sprint.title,
+          description: sprint.description,
+          start_date: sprint.startDate,
+          end_date: sprint.endDate,
+          status: sprint.status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      const updatedSprint = {
+        ...sprints.find(s => s.id === id)!,
+        ...sprint,
+      };
+
+      setSprints(prev => prev.map(s => s.id === id ? updatedSprint : s));
+      
+      return updatedSprint;
+    } catch (error) {
+      console.error('Error updating sprint:', error);
+      throw error;
+    }
+  };
+
+  const deleteSprint = async (id: string) => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('sprints')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setSprints(prev => prev.filter(s => s.id !== id));
+      
+      setTasks(prev => prev.filter(t => t.sprintId !== id));
+    } catch (error) {
+      console.error('Error deleting sprint:', error);
+      throw error;
+    }
+  };
+
+  const getSprintsByProject = (projectId: string) => 
+    sprints.filter((s) => s.projectId === projectId);
+
+  const addTask = async (task: Omit<Task, "id" | "createdAt" | "updatedAt">) => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      // Handle special case for backlog tasks
+      const isBacklogTask = task.sprintId === "backlog";
+      const projectId = isBacklogTask 
+        ? task.projectId // Use provided projectId for backlog tasks
+        : getSprint(task.sprintId)?.projectId; // Get projectId from sprint
+        
+      if (!projectId && !isBacklogTask) throw new Error('Sprint not found');
+
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert([{
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          assign_to: task.assignedTo,
+          story_points: task.storyPoints,
+          sprint_id: task.sprintId,
+          project_id: projectId,
+          user_id: user.id
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (!data) throw new Error('Failed to create task');
+
+      const newTask: Task = {
+        id: data.id,
+        title: data.title,
+        description: data.description,
+        sprintId: data.sprint_id,
+        status: data.status as 'todo' | 'in-progress' | 'review' | 'done',
+        assignedTo: data.assign_to,
+        storyPoints: data.story_points,
+        createdAt: data.created_at,
+        updatedAt: data.created_at
+      };
+
+      setTasks(prev => [...prev, newTask]);
+      
+      if (!isBacklogTask && projectId) {
+        updateBurndownData(
+          projectId,
+          task.storyPoints || 0,
+          "add"
+        );
+      }
+      
+      return newTask;
+    } catch (error) {
+      console.error('Error adding task:', error);
+      throw error;
+    }
+  };
+
+  const getTask = (id: string) => tasks.find((t) => t.id === id);
+
+  const updateTask = async (id: string, task: Partial<Omit<Task, "id">>) => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      const existingTask = tasks.find(t => t.id === id);
+      if (!existingTask) throw new Error('Task not found');
+
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          assign_to: task.assignedTo,
+          story_points: task.storyPoints,
+          sprint_id: task.sprintId
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      const updatedTask = {
+        ...existingTask,
+        ...task,
+        updatedAt: new Date().toISOString(),
+      };
+
+      setTasks(prev => prev.map(t => t.id === id ? updatedTask : t));
+      
+      if (
+        existingTask.status !== "done" && 
+        updatedTask.status === "done" &&
+        existingTask.storyPoints
+      ) {
+        const sprint = getSprint(existingTask.sprintId);
+        if (sprint) {
+          updateBurndownData(
+            sprint.projectId,
+            existingTask.storyPoints,
+            "complete"
+          );
+        }
+      }
+      
+      return updatedTask;
+    } catch (error) {
+      console.error('Error updating task:', error);
+      throw error;
+    }
+  };
+
+  const deleteTask = async (id: string) => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      const taskToDelete = tasks.find(t => t.id === id);
+      if (!taskToDelete) throw new Error('Task not found');
+
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setTasks(prev => prev.filter(t => t.id !== id));
+      
+      const sprint = getSprint(taskToDelete.sprintId);
+      if (sprint && taskToDelete.storyPoints) {
+        updateBurndownData(
+          sprint.projectId,
+          taskToDelete.storyPoints,
+          taskToDelete.status === "done" ? "complete" : "add"
+        );
+      }
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      throw error;
+    }
+  };
+
+  const getTasksBySprint = (sprintId: string) => 
+    tasks.filter((t) => t.sprintId === sprintId);
+
+  const generateDefaultBurndownData = (): BurndownData[] => {
+    const data: BurndownData[] = [];
+    const today = new Date();
     
-    // Find the earliest sprint start date and latest end date
-    const startDates = projectSprints.map(sprint => new Date(sprint.startDate).getTime());
-    const endDates = projectSprints.map(sprint => new Date(sprint.endDate).getTime());
-    
-    const projectStartDate = new Date(Math.min(...startDates));
-    const projectEndDate = new Date(Math.max(...endDates));
-    
-    // Generate dates between start and end
-    const dates: BurndownData[] = [];
-    const currentDate = new Date(projectStartDate);
-    const totalDays = Math.ceil((projectEndDate.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24));
-    
-    // Get total story points
-    const projectTasks = tasks.filter(task => 
-      projectSprints.some(sprint => sprint.id === task.sprintId)
-    );
-    
-    const totalStoryPoints = projectTasks.reduce((sum, task) => sum + task.storyPoints, 0);
-    
-    // Create ideal burndown line
-    for (let i = 0; i <= totalDays; i++) {
-      const date = new Date(currentDate);
+    for (let i = 0; i < 21; i++) {
+      const date = new Date(today);
       date.setDate(date.getDate() + i);
       
-      const idealRemaining = totalStoryPoints - (totalStoryPoints * (i / totalDays));
-      
-      dates.push({
-        date: date.toLocaleDateString(),
-        ideal: Math.max(0, Math.round(idealRemaining * 10) / 10),
-        actual: 0 // We'll calculate this below
+      data.push({
+        date: date.toISOString().split("T")[0],
+        ideal: 0,
+        actual: 0,
       });
     }
     
-    // Calculate actual burndown (simplified for demo)
-    // In real app, this would use task completion dates
-    dates.forEach((data, index) => {
-      // Mock actual data that somewhat follows the ideal line with some variations
-      if (index === 0) {
-        data.actual = totalStoryPoints;
-      } else if (index === dates.length - 1) {
-        data.actual = Math.random() * 2; // Close to zero but not quite
-      } else {
-        // Add some randomness to make it look realistic
-        const variance = (Math.random() - 0.5) * 2; // between -1 and 1
-        data.actual = Math.max(0, data.ideal + variance);
-      }
-    });
-    
-    return dates;
+    return data;
   };
+
+  const updateBurndownData = (
+    projectId: string,
+    points: number,
+    action: "add" | "complete" | "remove"
+  ) => {
+    if (!projectId || !points) return;
+    
+    setBurndownData((prev) => {
+      const projectData = prev[projectId] || generateDefaultBurndownData();
+      const today = new Date().toISOString().split("T")[0];
+      
+      const updatedData = projectData.map((item) => {
+        if (item.date >= today) {
+          if (action === "add") {
+            return { ...item, ideal: item.ideal + points };
+          } else if (action === "remove") {
+            return { ...item, ideal: Math.max(0, item.ideal - points) };
+          }
+        }
+        
+        if (item.date === today) {
+          if (action === "complete") {
+            return { ...item, actual: item.actual + points };
+          } else if (action === "remove" && item.actual > 0) {
+            return { ...item, actual: Math.max(0, item.actual - points) };
+          }
+        }
+        
+        return item;
+      });
+      
+      return { ...prev, [projectId]: updatedData };
+    });
+  };
+
+  const getBurndownData = (projectId: string) => 
+    burndownData[projectId] || generateDefaultBurndownData();
 
   return (
     <ProjectContext.Provider
@@ -262,31 +628,25 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         projects,
         sprints,
         tasks,
+        burndownData,
         addProject,
         getProject,
         updateProject,
         deleteProject,
         addSprint,
         getSprint,
-        getSprintsByProject,
         updateSprint,
         deleteSprint,
+        getSprintsByProject,
         addTask,
-        getTasksBySprintId,
+        getTask,
         updateTask,
         deleteTask,
-        getBurndownData
+        getTasksBySprint,
+        getBurndownData,
       }}
     >
       {children}
     </ProjectContext.Provider>
   );
-};
-
-export const useProject = () => {
-  const context = useContext(ProjectContext);
-  if (context === undefined) {
-    throw new Error('useProject must be used within a ProjectProvider');
-  }
-  return context;
 };

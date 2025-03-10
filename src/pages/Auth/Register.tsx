@@ -5,28 +5,34 @@ import { useAuth } from "@/context/AuthContext";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
 
-const Login: React.FC = () => {
-  const [emailOrUsername, setEmailOrUsername] = useState("");
+const Register: React.FC = () => {
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { register } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!emailOrUsername.trim() || !password.trim()) {
+    if (!username.trim() || !email.trim() || !password.trim()) {
       toast.error("All fields are required");
+      return;
+    }
+    
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
       return;
     }
     
     setLoading(true);
     try {
-      await login(emailOrUsername, password);
-      toast.success("Logged in successfully");
+      await register(username, email, password);
+      toast.success("Account created successfully");
       navigate("/");
     } catch (error: any) {
-      toast.error(error.message || "Failed to login");
+      toast.error(error.message || "Failed to create account");
     } finally {
       setLoading(false);
     }
@@ -43,19 +49,33 @@ const Login: React.FC = () => {
         </div>
         
         <div className="bg-scrum-card border border-scrum-border rounded-lg p-8 w-full">
-          <h2 className="text-2xl font-bold mb-6">Sign In</h2>
+          <h2 className="text-2xl font-bold mb-6">Create Account</h2>
           
           <form onSubmit={handleSubmit}>
             <div className="mb-4">
               <label className="block mb-2 text-sm">
-                Email or Username
+                Username
               </label>
               <input
                 type="text"
-                value={emailOrUsername}
-                onChange={(e) => setEmailOrUsername(e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="scrum-input"
-                placeholder="Enter your email or username"
+                placeholder="Choose a username"
+                required
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label className="block mb-2 text-sm">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="scrum-input"
+                placeholder="Enter your email"
                 required
               />
             </div>
@@ -69,7 +89,7 @@ const Login: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="scrum-input"
-                placeholder="Enter your password"
+                placeholder="Create a password"
                 required
               />
             </div>
@@ -79,15 +99,15 @@ const Login: React.FC = () => {
               className="scrum-button w-full"
               disabled={loading}
             >
-              {loading ? "Signing In..." : "Sign In"}
+              {loading ? "Creating Account..." : "Create Account"}
             </button>
           </form>
           
           <div className="mt-6 text-center">
             <p className="text-sm text-scrum-text-secondary">
-              Don't have an account?{" "}
-              <Link to="/register" className="text-primary hover:underline">
-                Sign Up
+              Already have an account?{" "}
+              <Link to="/login" className="text-primary hover:underline">
+                Sign In
               </Link>
             </p>
           </div>
@@ -97,4 +117,4 @@ const Login: React.FC = () => {
   );
 };
 
-export default Login;
+export default Register;

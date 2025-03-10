@@ -5,86 +5,100 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 142.1 76.2% 36.3%;
-    --primary-foreground: 355.7 100% 97.3%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
+    --background: 0 0% 6%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 9%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 50.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 142.1 76.2% 36.3%;
+
+    --border: 0 0% 18%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.9%;
+
     --radius: 0.5rem;
   }
 
-  .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 142.1 70.6% 45.3%;
-    --primary-foreground: 144.9 80.4% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 142.4 71.8% 29.2%;
-  }
-}
-
-@layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings: "ss01";
   }
 
-  /* Custom scrollbar for dark theme */
+  /* Custom scrollbar style */
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
-  
+
   ::-webkit-scrollbar-track {
-    background: #121212;
+    @apply bg-scrum-card;
   }
-  
+
   ::-webkit-scrollbar-thumb {
-    background: #333;
-    border-radius: 4px;
+    @apply bg-scrum-accent rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-scrum-highlight;
+  }
+}
+
+@layer components {
+  .scrum-card {
+    @apply bg-scrum-card rounded-md border border-scrum-border p-4 transition-all duration-200;
   }
   
-  ::-webkit-scrollbar-thumb:hover {
-    background: #444;
+  .scrum-button {
+    @apply bg-white text-black hover:bg-opacity-90 py-2 px-4 rounded-md transition-all duration-200 font-medium;
+  }
+  
+  .scrum-button-secondary {
+    @apply bg-scrum-accent text-white hover:bg-scrum-highlight py-2 px-4 rounded-md transition-all duration-200;
+  }
+
+  .scrum-input {
+    @apply bg-scrum-card border border-scrum-border text-white rounded-md py-2 px-4 w-full focus:outline-none focus:ring-1 focus:ring-scrum-highlight;
+  }
+
+  .nav-link {
+    @apply px-4 py-2 rounded-md transition-all duration-200 flex items-center gap-2;
+  }
+
+  .nav-link.active {
+    @apply bg-scrum-accent text-white;
+  }
+  
+  .nav-link:not(.active) {
+    @apply text-scrum-text-secondary hover:bg-scrum-accent hover:bg-opacity-30;
   }
 }
 
-html, body, #root {
-  @apply bg-black text-white min-h-screen w-full overflow-x-hidden;
+.saturate-on-hover {
+  filter: saturate(0.8);
+  transition: filter 0.3s ease;
 }
 
-#root {
-  max-width: 100%;
-  margin: 0;
-  padding: 0;
+.saturate-on-hover:hover {
+  filter: saturate(1.2);
 }
