@@ -492,6 +492,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         status: task.status,
         assign_to: task.assignedTo,
         story_points: task.storyPoints,
+        priority: task.priority,
         sprint_id: isBacklogTask ? null : task.sprintId,
         project_id: projectId,
         user_id: user.id
@@ -515,6 +516,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         status: data.status as 'todo' | 'in-progress' | 'review' | 'done' | 'backlog',
         assignedTo: data.assign_to,
         storyPoints: data.story_points,
+        priority: data.priority as 'low' | 'medium' | 'high',
         createdAt: data.created_at,
         updatedAt: data.created_at,
         projectId: data.project_id

@@ -93,7 +93,7 @@ const BacklogItemForm: React.FC<BacklogItemFormProps> = ({ taskId, onClose, proj
           description: data.description,
           status: "backlog", // Use status instead of sprintId for backlog items
           projectId: projectId, // Set projectId for the task
-          priority: data.priority,
+          priority: data.priority, // Making sure priority is passed correctly
           storyPoints: data.storyPoints,
           sprintId: "", // Add the missing sprintId property with an empty string for backlog items
         });

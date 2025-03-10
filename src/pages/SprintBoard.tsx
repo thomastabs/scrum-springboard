@@ -206,16 +206,28 @@ const SprintBoard: React.FC = () => {
     if (!sprint) return;
     
     try {
-      if (sprint.status === "completed") {
+      if (sprint.status === "completed" as "planned" | "in-progress" | "completed") {
         toast.info("Sprint is already completed");
         return;
       }
       
-      await updateSprint(sprint.id, { status: "completed" });
+      await updateSprint(sprintId, {
+        status: "completed",
+      });
+      
       toast.success("Sprint marked as completed");
+      
+      if (sprint) {
+        setSprint({
+          ...sprint,
+          status: "completed",
+        });
+      }
+      
+      setIsSprintCompleted(true);
     } catch (error) {
-      toast.error("Failed to update sprint status");
-      console.error(error);
+      console.error("Error completing sprint:", error);
+      toast.error("Failed to complete sprint");
     }
   };
   
