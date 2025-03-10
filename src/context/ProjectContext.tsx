@@ -97,6 +97,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         
         formattedProjects.forEach(project => {
           fetchSprints(project.id);
+          fetchBacklogTasks(project.id);
         });
       }
     } catch (error) {
@@ -201,6 +202,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       if (data) {
+        console.log('Fetched backlog tasks:', data);
         const formattedTasks: Task[] = data.map(task => ({
           id: task.id,
           title: task.title,
@@ -209,8 +211,9 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
           status: 'backlog',
           assignedTo: task.assign_to,
           storyPoints: task.story_points,
+          priority: task.priority as 'low' | 'medium' | 'high',
           createdAt: task.created_at,
-          updatedAt: task.created_at,
+          updatedAt: task.updated_at,
           projectId: task.project_id
         }));
 
@@ -308,13 +311,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!user) throw new Error('User not authenticated');
 
     try {
-      // First, get all sprints for this project
       const projectSprints = sprints.filter(s => s.projectId === id);
       const sprintIds = projectSprints.map(s => s.id);
       
-      // Then delete all tasks related to these sprints
       if (sprintIds.length > 0) {
-        // Delete tasks associated with the sprints
         const { error: tasksError } = await supabase
           .from('tasks')
           .delete()
@@ -326,7 +326,6 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
           throw tasksError;
         }
         
-        // Delete all sprints for this project
         const { error: sprintsError } = await supabase
           .from('sprints')
           .delete()
@@ -339,7 +338,6 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       }
       
-      // Delete backlog tasks for this project
       const { error: backlogTasksError } = await supabase
         .from('tasks')
         .delete()
@@ -352,7 +350,6 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         throw backlogTasksError;
       }
       
-      // Finally delete the project
       const { error } = await supabase
         .from('projects')
         .delete()
@@ -480,11 +477,12 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!user) throw new Error('User not authenticated');
 
     try {
-      // Handle special case for backlog tasks
       const isBacklogTask = task.status === "backlog";
       const projectId = task.projectId;
 
       if (!projectId) throw new Error('Project ID is required');
+
+      console.log('Adding task with data:', task);
 
       const taskData = {
         title: task.title,
@@ -507,6 +505,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (error) throw error;
 
       if (!data) throw new Error('Failed to create task');
+
+      console.log('Task created in database:', data);
 
       const newTask: Task = {
         id: data.id,

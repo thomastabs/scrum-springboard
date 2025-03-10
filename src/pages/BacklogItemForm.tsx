@@ -88,6 +88,8 @@ const BacklogItemForm: React.FC<BacklogItemFormProps> = ({ taskId, onClose, proj
           return;
         }
         
+        console.log('Creating new backlog item with project ID:', projectId); // Add logging to help debug
+        
         await addTask({
           title: data.title,
           description: data.description,

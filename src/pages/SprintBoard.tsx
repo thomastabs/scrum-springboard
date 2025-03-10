@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
@@ -143,7 +142,7 @@ const SprintBoard: React.FC = () => {
             task => task.id !== draggableId && task.status !== "done"
           );
           
-          if (remainingTasks.length === 0 && sprint?.status === "in-progress") {
+          if (remainingTasks.length === 0 && sprint && (sprint.status as string) === "completed") {
             if (window.confirm("All tasks are completed! Would you like to mark this sprint as completed?")) {
               await updateSprint(sprint.id, { status: "completed" });
               toast.success("Sprint marked as completed!");
@@ -207,7 +206,7 @@ const SprintBoard: React.FC = () => {
     if (!sprint) return;
     
     try {
-      if (sprint.status === "completed") {
+      if (sprint && (sprint.status as string) === "completed") {
         toast.info("Sprint is already completed");
         return;
       }
@@ -237,7 +236,6 @@ const SprintBoard: React.FC = () => {
     );
   }
   
-  // Use type assertion to help TypeScript narrow the type
   const sprintStatus = sprint.status as 'planned' | 'in-progress' | 'completed';
   const allTasksCompleted = tasks.length > 0 && tasks.every(task => task.status === "done");
   

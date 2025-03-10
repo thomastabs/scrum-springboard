@@ -62,7 +62,9 @@ const ProductBacklog: React.FC = () => {
   useEffect(() => {
     if (!projectId) return;
     
+    console.log('Fetching backlog tasks for project ID:', projectId); // Add logging to help debug
     const tasks = getBacklogTasks(projectId);
+    console.log('Retrieved backlog tasks:', tasks); // Add logging to help debug
     setBacklogTasks(tasks);
   }, [projectId, getBacklogTasks]);
   
