@@ -2,18 +2,15 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import { Plus, Edit, Trash, AlertCircle } from "lucide-react";
+import { Plus, Edit, Trash, Play, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import TaskCard from "@/components/tasks/TaskCard";
 import EditTaskModal from "@/components/tasks/EditTaskModal";
 import AddColumnModal from "@/components/sprints/AddColumnModal";
-import { Sprint } from "@/types";
-import { Project } from "@/types";
-import { Task } from "@/types";
 
 const SprintBoard: React.FC = () => {
-  const { sprintId, projectId } = useParams<{ sprintId: string, projectId?: string }>();
-  const { getSprint, getTasksBySprint, updateSprint, updateTask, getProject } = useProjects();
+  const { sprintId } = useParams<{ sprintId: string }>();
+  const { getSprint, getTasksBySprint, updateSprint, updateTask } = useProjects();
   const navigate = useNavigate();
   
   const [columns, setColumns] = useState<{[key: string]: {title: string, taskIds: string[]}}>(
@@ -30,7 +27,6 @@ const SprintBoard: React.FC = () => {
   
   const sprint = getSprint(sprintId || "");
   const tasks = getTasksBySprint(sprintId || "");
-  const project = projectId ? getProject(projectId) : (sprint ? getProject(sprint.projectId) : null);
   
   useEffect(() => {
     if (!sprint) return;
@@ -64,10 +60,7 @@ const SprintBoard: React.FC = () => {
       if (initialColumns[task.status]) {
         initialColumns[task.status].taskIds.push(task.id);
       } else {
-        initialColumns[task.status] = {
-          title: task.status.toUpperCase().replace(/-/g, ' '),
-          taskIds: [task.id]
-        };
+        initialColumns["todo"].taskIds.push(task.id);
       }
     });
     
@@ -142,7 +135,7 @@ const SprintBoard: React.FC = () => {
             task => task.id !== draggableId && task.status !== "done"
           );
           
-          if (remainingTasks.length === 0 && sprint && (sprint.status as string) === "completed") {
+          if (remainingTasks.length === 0 && sprint?.status === "in-progress") {
             if (window.confirm("All tasks are completed! Would you like to mark this sprint as completed?")) {
               await updateSprint(sprint.id, { status: "completed" });
               toast.success("Sprint marked as completed!");
@@ -202,88 +195,45 @@ const SprintBoard: React.FC = () => {
     setCreatingTaskInColumn(columnId);
   };
   
-  const handleCompleteButtonClick = async () => {
-    if (!sprint) return;
-    
-    try {
-      if (sprint && (sprint.status as string) === "completed") {
-        toast.info("Sprint is already completed");
+  if (!sprint) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-xl font-bold mb-4">Sprint not found</h2>
+        <button
+          onClick={() => navigate(-1)}
+          className="scrum-button"
+        >
+          Go Back
+        </button>
+      </div>
+    );
+  }
+  
+  const allTasksCompleted = tasks.length > 0 && tasks.every(task => task.status === "done");
+  
+  const handleCompleteSprint = async () => {
+    if (!allTasksCompleted) {
+      if (!window.confirm("Not all tasks are completed. Are you sure you want to complete this sprint?")) {
         return;
       }
-      
-      await updateSprint(sprint.id, {
-        status: "completed",
-      });
-      
-      toast.success("Sprint marked as completed");
+    }
+    
+    try {
+      await updateSprint(sprint.id, { status: "completed" });
+      toast.success("Sprint marked as completed!");
     } catch (error) {
       console.error("Error completing sprint:", error);
       toast.error("Failed to complete sprint");
     }
   };
   
-  if (!sprint) {
-    return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-bold mb-4">Sprint not found</h2>
-        <button
-          onClick={() => navigate("/")}
-          className="scrum-button"
-        >
-          Go to Dashboard
-        </button>
-      </div>
-    );
-  }
-  
-  const sprintStatus = sprint.status as 'planned' | 'in-progress' | 'completed';
-  const allTasksCompleted = tasks.length > 0 && tasks.every(task => task.status === "done");
-  
-  const handleEditSprint = () => {
-    if (projectId) {
-      navigate(`/projects/${projectId}/sprint/${sprint.id}/edit`);
-    } else {
-      navigate(`/projects/${sprint.projectId}/sprint/${sprint.id}/edit`);
-    }
-  };
-  
   return (
     <div className="container mx-auto pb-20 px-4">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold">{sprint.title}</h2>
-            {sprintStatus === "completed" && (
-              <span className="bg-success text-white text-xs px-2 py-1 rounded-full">
-                Completed
-              </span>
-            )}
-          </div>
-          <p className="text-scrum-text-secondary">{sprint.description}</p>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {sprintStatus !== "completed" && (
-            <>
-              <button
-                onClick={handleEditSprint}
-                className="scrum-button-secondary flex items-center gap-1"
-              >
-                <Edit className="h-4 w-4" />
-                <span>Edit Sprint</span>
-              </button>
-              
-              <button
-                onClick={handleCompleteButtonClick}
-                className={`scrum-button ${allTasksCompleted ? "bg-success hover:bg-success/90" : ""}`}
-                disabled={sprintStatus === "completed"}
-              >
-                Complete Sprint
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+      <SprintHeader 
+        sprint={sprint}
+        onStartSprint={() => navigate(`/projects/${sprint.projectId}/sprint/${sprint.id}/edit`)}
+        onCompleteSprint={handleCompleteSprint}
+      />
       
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-medium">Sprint Board</h3>
@@ -292,7 +242,7 @@ const SprintBoard: React.FC = () => {
           <button
             onClick={() => setIsAddColumnModalOpen(true)}
             className="scrum-button-secondary flex items-center gap-1 text-sm"
-            disabled={sprintStatus === "completed"}
+            disabled={sprint.status === "completed"}
           >
             <Plus className="h-4 w-4" />
             <span>Add Column</span>
@@ -301,7 +251,7 @@ const SprintBoard: React.FC = () => {
       </div>
       
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-4 overflow-x-auto">
+        <div className="flex gap-4 pb-4 overflow-x-auto">
           {columnOrder.map((columnId) => {
             const column = columns[columnId];
             
@@ -312,12 +262,12 @@ const SprintBoard: React.FC = () => {
             ).filter(Boolean);
             
             return (
-              <div key={columnId} className="min-w-[270px]">
+              <div key={columnId} className="min-w-[270px] max-w-[270px] flex-shrink-0">
                 <div className="bg-scrum-card border border-scrum-border rounded-md h-full flex flex-col">
                   <div className="flex items-center justify-between p-3 border-b border-scrum-border">
                     <h4 className="font-medium text-sm">{column.title}</h4>
                     <div className="flex items-center">
-                      {sprintStatus !== "completed" && (
+                      {sprint.status !== "completed" && (
                         <button
                           onClick={() => handleCreateTaskInColumn(columnId)}
                           className="text-scrum-text-secondary hover:text-white transition-colors mr-2"
@@ -331,7 +281,7 @@ const SprintBoard: React.FC = () => {
                         <button
                           onClick={() => handleRemoveColumn(columnId)}
                           className="text-scrum-text-secondary hover:text-destructive transition-colors"
-                          disabled={sprintStatus === "completed"}
+                          disabled={sprint.status === "completed"}
                           title="Remove column"
                         >
                           <Trash className="h-4 w-4" />
@@ -340,7 +290,7 @@ const SprintBoard: React.FC = () => {
                     </div>
                   </div>
                   
-                  <Droppable droppableId={columnId} isDropDisabled={sprintStatus === "completed"}>
+                  <Droppable droppableId={columnId} isDropDisabled={sprint.status === "completed"}>
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
@@ -353,7 +303,7 @@ const SprintBoard: React.FC = () => {
                               key={task.id}
                               draggableId={task.id}
                               index={index}
-                              isDragDisabled={sprintStatus === "completed"}
+                              isDragDisabled={sprint.status === "completed"}
                             >
                               {(provided, snapshot) => (
                                 <div
@@ -365,7 +315,7 @@ const SprintBoard: React.FC = () => {
                                   <TaskCard
                                     task={task}
                                     onEdit={() => setEditingTask(task.id)}
-                                    isSprintCompleted={sprintStatus === "completed"}
+                                    isSprintCompleted={sprint.status === "completed"}
                                   />
                                 </div>
                               )}
@@ -373,6 +323,12 @@ const SprintBoard: React.FC = () => {
                           )
                         ))}
                         {provided.placeholder}
+                        
+                        {columnTasks.length === 0 && (
+                          <div className="text-center py-4 text-scrum-text-secondary text-sm italic">
+                            No tasks
+                          </div>
+                        )}
                       </div>
                     )}
                   </Droppable>
@@ -402,7 +358,6 @@ const SprintBoard: React.FC = () => {
           <div className="bg-scrum-card border border-scrum-border rounded-lg p-6 w-full max-w-lg animate-fade-up">
             <NewTaskForm 
               sprintId={sprint.id}
-              projectId={sprint.projectId} // Pass the project ID from the sprint
               initialStatus={creatingTaskInColumn}
               onClose={() => setCreatingTaskInColumn(null)}
             />
@@ -413,19 +368,79 @@ const SprintBoard: React.FC = () => {
   );
 };
 
+interface SprintHeaderProps {
+  sprint: {
+    id: string;
+    title: string;
+    description: string;
+    projectId: string;
+    startDate: string;
+    endDate: string;
+    status: 'planned' | 'in-progress' | 'completed';
+  };
+  onStartSprint: () => void;
+  onCompleteSprint: () => void;
+}
+
+const SprintHeader: React.FC<SprintHeaderProps> = ({ 
+  sprint, 
+  onStartSprint, 
+  onCompleteSprint 
+}) => {
+  const formatDateRange = (start: string, end: string) => {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    
+    return `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+  };
+  
+  return (
+    <div className="flex items-center justify-between p-4 border-b border-scrum-border">
+      <div>
+        <h1 className="font-bold text-xl">{sprint.title}</h1>
+        <div className="text-sm text-scrum-text-secondary">
+          {formatDateRange(sprint.startDate, sprint.endDate)}
+        </div>
+      </div>
+      
+      <div>
+        {sprint.status === "planned" && (
+          <button
+            onClick={onStartSprint}
+            className="scrum-button flex items-center gap-1"
+          >
+            <Play className="h-4 w-4" />
+            <span>Start Sprint</span>
+          </button>
+        )}
+        
+        {sprint.status === "in-progress" && (
+          <button
+            onClick={onCompleteSprint}
+            className="scrum-button-success flex items-center gap-1"
+          >
+            <CheckCircle className="h-4 w-4" />
+            <span>Complete Sprint</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const NewTaskForm: React.FC<{
   sprintId: string;
-  projectId: string; // Add projectId as a required prop
   initialStatus: string;
   onClose: () => void;
-}> = ({ sprintId, projectId, initialStatus, onClose }) => {
+}> = ({ sprintId, initialStatus, onClose }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "">("");
   const [assignedTo, setAssignedTo] = useState("");
   const [storyPoints, setStoryPoints] = useState<number | "">("");
   
-  const { addTask } = useProjects();
+  const { addTask, getSprint } = useProjects();
+  const sprint = getSprint(sprintId);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -435,12 +450,17 @@ const NewTaskForm: React.FC<{
       return;
     }
     
+    if (!sprint) {
+      toast.error("Sprint not found");
+      return;
+    }
+    
     try {
       await addTask({
         title,
         description,
         sprintId,
-        projectId, // Pass the projectId to the addTask function
+        projectId: sprint.projectId,
         status: initialStatus as any,
         assignedTo: assignedTo || undefined,
         priority: priority || undefined,
