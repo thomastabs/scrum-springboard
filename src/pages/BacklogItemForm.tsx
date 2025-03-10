@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -91,9 +90,8 @@ const BacklogItemForm: React.FC<BacklogItemFormProps> = ({ taskId, onClose, proj
         await addTask({
           title: data.title,
           description: data.description,
-          sprintId: "backlog", // We use "backlog" as a virtual sprint ID
+          status: "backlog", // Use status instead of sprintId for backlog items
           projectId: projectId, // Set projectId for the task
-          status: "backlog",
           priority: data.priority,
           storyPoints: data.storyPoints,
         });
