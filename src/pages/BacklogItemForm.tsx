@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -94,6 +95,7 @@ const BacklogItemForm: React.FC<BacklogItemFormProps> = ({ taskId, onClose, proj
           projectId: projectId, // Set projectId for the task
           priority: data.priority,
           storyPoints: data.storyPoints,
+          sprintId: "", // Add the missing sprintId property with an empty string for backlog items
         });
         toast.success("Backlog item created successfully");
       }
