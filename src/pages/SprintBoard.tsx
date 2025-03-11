@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
+import { useAuth } from "@/context/AuthContext";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import { Plus, Edit, Trash, Play, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -14,7 +14,7 @@ const SprintBoard: React.FC = () => {
   const { sprintId } = useParams<{ sprintId: string }>();
   const { getSprint, getTasksBySprint, updateSprint, updateTask } = useProjects();
   const navigate = useNavigate();
-  const { user } = useProjects();
+  const { user } = useAuth();
   
   const [columns, setColumns] = useState<{[key: string]: {title: string, taskIds: string[], id?: string}}>(
     {
@@ -31,7 +31,6 @@ const SprintBoard: React.FC = () => {
   const sprint = getSprint(sprintId || "");
   const tasks = getTasksBySprint(sprintId || "");
 
-  // Fetch columns from database
   useEffect(() => {
     if (!sprint || !user?.id) return;
     
@@ -40,7 +39,6 @@ const SprintBoard: React.FC = () => {
         const dbColumns = await fetchSprintColumns(sprint.id, user.id);
         
         if (dbColumns.length > 0) {
-          // If we have custom columns in the database, use them
           const columnData: {[key: string]: {title: string, taskIds: string[], id?: string}} = {};
           const colOrder: string[] = [];
           
@@ -57,7 +55,6 @@ const SprintBoard: React.FC = () => {
           setColumns(columnData);
           setColumnOrder(colOrder);
         } else {
-          // Create default columns in the database
           const defaultColumns = [
             { title: "TO DO", status: "todo", orderIndex: 0 },
             { title: "IN PROGRESS", status: "in-progress", orderIndex: 1 },
@@ -96,7 +93,6 @@ const SprintBoard: React.FC = () => {
     
     const initialColumns = {...columns};
     
-    // Reset taskIds arrays
     Object.keys(initialColumns).forEach(colId => {
       initialColumns[colId].taskIds = [];
     });
@@ -105,7 +101,6 @@ const SprintBoard: React.FC = () => {
       if (initialColumns[task.status]) {
         initialColumns[task.status].taskIds.push(task.id);
       } else if (initialColumns["todo"]) {
-        // If status doesn't match any column, put in todo
         initialColumns["todo"].taskIds.push(task.id);
       }
     });

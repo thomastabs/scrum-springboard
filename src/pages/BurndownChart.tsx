@@ -50,6 +50,7 @@ const BurndownChart: React.FC = () => {
           }));
           
           setChartData(formattedData);
+          console.log("Fetched burndown data:", formattedData);
         } else {
           // Generate default data if none exists
           const defaultData = generateDefaultData();
@@ -185,6 +186,7 @@ const BurndownChart: React.FC = () => {
               name="Actual Burndown"
               dot={true}
               activeDot={{ r: 8 }}
+              connectNulls={true}
             />
           </LineChart>
         </ResponsiveContainer>
