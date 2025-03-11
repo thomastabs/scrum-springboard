@@ -17,6 +17,7 @@ export const fetchSprintColumns = async (sprintId: string, userId: string) => {
       .order('order_index', { ascending: true });
       
     if (error) throw error;
+    console.log("Fetched board columns:", data);
     return data || [];
   } catch (error) {
     console.error('Error fetching sprint columns:', error);
@@ -49,6 +50,7 @@ export const createDefaultColumn = async (sprintId: string, userId: string, titl
 // Helper function to add a custom column
 export const addCustomColumn = async (sprintId: string, userId: string, title: string, orderIndex: number) => {
   try {
+    console.log("Adding custom column:", { sprintId, userId, title, orderIndex });
     const { data, error } = await supabase
       .from('board_columns')
       .insert({
@@ -60,7 +62,12 @@ export const addCustomColumn = async (sprintId: string, userId: string, title: s
       .select()
       .single();
       
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase error adding column:", error);
+      throw error;
+    }
+    
+    console.log("Column added successfully:", data);
     return data;
   } catch (error) {
     console.error('Error adding custom column:', error);

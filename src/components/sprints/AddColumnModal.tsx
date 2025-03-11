@@ -9,13 +9,18 @@ interface AddColumnModalProps {
 
 const AddColumnModal: React.FC<AddColumnModalProps> = ({ onClose, onAdd }) => {
   const [columnName, setColumnName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (columnName.trim()) {
-      onAdd(columnName.trim());
-      setColumnName("");
+      setIsSubmitting(true);
+      try {
+        await onAdd(columnName.trim());
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
   
@@ -27,6 +32,7 @@ const AddColumnModal: React.FC<AddColumnModalProps> = ({ onClose, onAdd }) => {
           <button
             onClick={onClose}
             className="text-scrum-text-secondary hover:text-white"
+            disabled={isSubmitting}
           >
             <X className="h-5 w-5" />
           </button>
@@ -45,6 +51,7 @@ const AddColumnModal: React.FC<AddColumnModalProps> = ({ onClose, onAdd }) => {
               placeholder="e.g. Review"
               required
               autoFocus
+              disabled={isSubmitting}
             />
           </div>
           
@@ -53,15 +60,16 @@ const AddColumnModal: React.FC<AddColumnModalProps> = ({ onClose, onAdd }) => {
               type="button"
               onClick={onClose}
               className="scrum-button-secondary"
+              disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
               className="scrum-button"
-              disabled={!columnName.trim()}
+              disabled={!columnName.trim() || isSubmitting}
             >
-              Add Column
+              {isSubmitting ? 'Adding...' : 'Add Column'}
             </button>
           </div>
         </form>
