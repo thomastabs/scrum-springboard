@@ -14,7 +14,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { format, parseISO, startOfDay, addDays } from "date-fns";
+import { format, parseISO, startOfDay, addDays, min, max, differenceInDays, isBefore, isAfter } from "date-fns";
 import { toast } from "sonner";
 
 interface BurndownDataPoint {
@@ -96,7 +96,40 @@ const BurndownChart: React.FC = () => {
     // Get all sprints for the project
     const projectSprints = getSprintsByProject(projectId || "");
     
-    // Calculate total story points from all tasks in all sprints
+    if (projectSprints.length === 0) {
+      // If no sprints exist, use default 21-day range
+      return generateDefaultTimeframe(today, 21);
+    }
+    
+    // Find earliest sprint start date and latest sprint end date
+    let earliestStartDate: Date | null = null;
+    let latestEndDate: Date | null = null;
+    
+    for (const sprint of projectSprints) {
+      const startDate = parseISO(sprint.startDate);
+      const endDate = parseISO(sprint.endDate);
+      
+      if (!earliestStartDate || isBefore(startDate, earliestStartDate)) {
+        earliestStartDate = startDate;
+      }
+      
+      if (!latestEndDate || isAfter(endDate, latestEndDate)) {
+        latestEndDate = endDate;
+      }
+    }
+    
+    // Ensure we have valid dates
+    if (!earliestStartDate || !latestEndDate) {
+      return generateDefaultTimeframe(today, 21);
+    }
+    
+    // Calculate days between earliest and latest dates
+    const daysInProject = differenceInDays(latestEndDate, earliestStartDate) + 1;
+    
+    // Ensure we have at least 7 days for visibility
+    const timeframeDays = Math.max(daysInProject, 7);
+    
+    // Calculate total and completed story points
     let totalStoryPoints = 0;
     let completedPoints = 0;
     
@@ -120,15 +153,15 @@ const BurndownChart: React.FC = () => {
       totalStoryPoints = 100;
     }
     
-    // Generate data for 21 days (3 weeks)
-    for (let i = 0; i < 21; i++) {
-      const date = addDays(today, i);
+    // Generate data points for each day in the project timeframe
+    for (let i = 0; i < timeframeDays; i++) {
+      const date = addDays(earliestStartDate, i);
       const dateStr = date.toISOString().split('T')[0];
       
-      // Calculate ideal burndown - linear decrease over 20 days
-      const idealRemaining = Math.max(0, totalStoryPoints - (i * (totalStoryPoints / 20)));
+      // Calculate ideal burndown - linear decrease over the project timeframe
+      const idealRemaining = Math.max(0, totalStoryPoints - (i * (totalStoryPoints / (timeframeDays - 1))));
       
-      // For actual burndown, start with total points minus completed
+      // For actual burndown, start with total points and then reduce based on completed tasks
       // Only reduce for past dates
       let actualRemaining = totalStoryPoints;
       const isPastDate = date <= today;
@@ -141,6 +174,26 @@ const BurndownChart: React.FC = () => {
         date: dateStr,
         ideal: Math.round(idealRemaining),
         actual: Math.round(actualRemaining),
+        formattedDate: format(date, "MMM dd"),
+      });
+    }
+    
+    return data;
+  };
+  
+  const generateDefaultTimeframe = (startDate: Date, days: number): BurndownDataPoint[] => {
+    const data: BurndownDataPoint[] = [];
+    const totalPoints = 100;
+    
+    for (let i = 0; i < days; i++) {
+      const date = addDays(startDate, i);
+      const dateStr = date.toISOString().split('T')[0];
+      const idealRemaining = Math.max(0, totalPoints - (i * (totalPoints / (days - 1))));
+      
+      data.push({
+        date: dateStr,
+        ideal: Math.round(idealRemaining),
+        actual: Math.round(idealRemaining), // Start with ideal for default
         formattedDate: format(date, "MMM dd"),
       });
     }
