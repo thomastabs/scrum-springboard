@@ -26,7 +26,7 @@ interface BurndownDataPoint {
 
 const BurndownChart: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
-  const { getProject } = useProjects();
+  const { getProject, getTasksBySprint, getSprintsByProject } = useProjects();
   const { user } = useAuth();
   const [chartData, setChartData] = useState<BurndownDataPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,8 +52,8 @@ const BurndownChart: React.FC = () => {
         let burndownData: BurndownDataPoint[] = [];
         
         if (!data || data.length === 0) {
-          // If no data exists, generate default data
-          burndownData = generateDefaultBurndownData();
+          // If no data exists, generate default data based on tasks
+          burndownData = await generateDefaultBurndownData();
           
           // Save default data to database
           await Promise.all(
@@ -89,28 +89,58 @@ const BurndownChart: React.FC = () => {
     fetchBurndownData();
   }, [projectId, user]);
   
-  const generateDefaultBurndownData = (): BurndownDataPoint[] => {
+  const generateDefaultBurndownData = async (): Promise<BurndownDataPoint[]> => {
     const data: BurndownDataPoint[] = [];
     const today = startOfDay(new Date());
     
-    // Generate data for 3 weeks
+    // Get all sprints for the project
+    const projectSprints = getSprintsByProject(projectId || "");
+    
+    // Calculate total story points from all tasks in all sprints
+    let totalStoryPoints = 0;
+    let completedPoints = 0;
+    
+    for (const sprint of projectSprints) {
+      const tasks = getTasksBySprint(sprint.id);
+      
+      for (const task of tasks) {
+        if (task.storyPoints) {
+          totalStoryPoints += task.storyPoints;
+          
+          // Count completed tasks for actual burndown
+          if (task.status === "done") {
+            completedPoints += task.storyPoints;
+          }
+        }
+      }
+    }
+    
+    // If no story points, set a default value
+    if (totalStoryPoints === 0) {
+      totalStoryPoints = 100;
+    }
+    
+    // Generate data for 21 days (3 weeks)
     for (let i = 0; i < 21; i++) {
       const date = addDays(today, i);
       const dateStr = date.toISOString().split('T')[0];
       
-      // For demo purposes, create a simple ideal burndown line
-      // In a real app, this would be based on total story points
-      const totalPoints = 100;
-      const idealRemaining = Math.max(0, totalPoints - (i * (totalPoints / 20)));
+      // Calculate ideal burndown - linear decrease over 20 days
+      const idealRemaining = Math.max(0, totalStoryPoints - (i * (totalStoryPoints / 20)));
       
-      // For actual, start with the same as ideal and then
-      // it will get updated as tasks are completed
-      const actualRemaining = idealRemaining;
+      // For actual burndown, start with total points minus completed
+      // Only reduce for past dates
+      let actualRemaining = totalStoryPoints;
+      const isPastDate = date <= today;
+      
+      if (isPastDate) {
+        actualRemaining = Math.max(0, totalStoryPoints - completedPoints);
+      }
       
       data.push({
         date: dateStr,
-        ideal: idealRemaining,
-        actual: actualRemaining,
+        ideal: Math.round(idealRemaining),
+        actual: Math.round(actualRemaining),
         formattedDate: format(date, "MMM dd"),
       });
     }
