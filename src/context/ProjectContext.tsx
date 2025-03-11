@@ -161,11 +161,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       if (data) {
+        // Map the database status values to ensure they are consistent
         const formattedTasks: Task[] = data.map(task => ({
           id: task.id,
           title: task.title,
           description: task.description,
           sprintId: task.sprint_id || '',
+          // Ensure we preserve the exact status from the database
           status: task.status,
           assignedTo: task.assign_to,
           storyPoints: task.story_points,
@@ -174,6 +176,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
           updatedAt: task.created_at,
           projectId: task.project_id
         }));
+
+        console.log('Fetched tasks with statuses:', formattedTasks.map(t => ({ id: t.id, status: t.status })));
 
         setTasks(prev => {
           const filtered = prev.filter(t => t.sprintId !== sprintId);
@@ -203,6 +207,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       if (data) {
+        console.log('Fetched backlog tasks:', data);
         const formattedTasks: Task[] = data.map(task => ({
           id: task.id,
           title: task.title,
@@ -525,7 +530,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setTasks(prev => [...prev, newTask]);
       
       if (!isBacklogTask && projectId && task.storyPoints) {
-        await updateBurndownDataInDb(
+        updateBurndownData(
           projectId,
           task.storyPoints,
           "add"
@@ -579,14 +584,16 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (
         existingTask.status !== "done" && 
         updatedTask.status === "done" &&
-        existingTask.storyPoints &&
-        existingTask.projectId
+        existingTask.storyPoints
       ) {
-        await updateBurndownDataInDb(
-          existingTask.projectId,
-          existingTask.storyPoints,
-          "complete"
-        );
+        const sprint = getSprint(existingTask.sprintId);
+        if (sprint) {
+          updateBurndownData(
+            sprint.projectId,
+            existingTask.storyPoints,
+            "complete"
+          );
+        }
       }
       
       return updatedTask;
@@ -615,7 +622,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       const sprint = getSprint(taskToDelete.sprintId);
       if (sprint && taskToDelete.storyPoints) {
-        await updateBurndownDataInDb(
+        updateBurndownData(
           sprint.projectId,
           taskToDelete.storyPoints,
           taskToDelete.status === "done" ? "complete" : "add"
@@ -651,101 +658,39 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return data;
   };
 
-  const updateBurndownDataInDb = async (
+  const updateBurndownData = (
     projectId: string,
     points: number,
     action: "add" | "complete" | "remove"
   ) => {
-    if (!projectId || !points || !user) return;
+    if (!projectId || !points) return;
     
-    try {
+    setBurndownData((prev) => {
+      const projectData = prev[projectId] || generateDefaultBurndownData();
       const today = new Date().toISOString().split("T")[0];
       
-      const { data: existingData, error: fetchError } = await supabase
-        .from('burndown_data')
-        .select('*')
-        .eq('project_id', projectId)
-        .eq('date', today)
-        .maybeSingle();
-        
-      if (fetchError) {
-        console.error('Error fetching burndown data:', fetchError);
-        return;
-      }
-      
-      if (existingData) {
-        let updatedIdeal = existingData.ideal_points;
-        let updatedActual = existingData.actual_points;
-        
-        if (action === "add") {
-          updatedIdeal += points;
-        } else if (action === "remove") {
-          updatedIdeal = Math.max(0, updatedIdeal - points);
-        }
-        
-        if (action === "complete") {
-          updatedActual += points;
-        } else if (action === "remove" && updatedActual > 0) {
-          updatedActual = Math.max(0, updatedActual - points);
-        }
-        
-        const { error: updateError } = await supabase
-          .from('burndown_data')
-          .update({
-            ideal_points: updatedIdeal,
-            actual_points: updatedActual,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingData.id);
-          
-        if (updateError) {
-          console.error('Error updating burndown data:', updateError);
-        }
-      } else {
-        const { error: insertError } = await supabase
-          .from('burndown_data')
-          .insert({
-            project_id: projectId,
-            date: today,
-            ideal_points: action === "add" ? points : 0,
-            actual_points: action === "complete" ? points : 0,
-            user_id: user.id
-          });
-          
-        if (insertError) {
-          console.error('Error creating burndown data:', insertError);
-        }
-      }
-      
-      setBurndownData((prev) => {
-        const projectData = prev[projectId] || generateDefaultBurndownData();
-        const today = new Date().toISOString().split("T")[0];
-        
-        const updatedData = projectData.map((item) => {
-          if (item.date >= today) {
-            if (action === "add") {
-              return { ...item, ideal: item.ideal + points };
-            } else if (action === "remove") {
-              return { ...item, ideal: Math.max(0, item.ideal - points) };
-            }
+      const updatedData = projectData.map((item) => {
+        if (item.date >= today) {
+          if (action === "add") {
+            return { ...item, ideal: item.ideal + points };
+          } else if (action === "remove") {
+            return { ...item, ideal: Math.max(0, item.ideal - points) };
           }
-          
-          if (item.date === today) {
-            if (action === "complete") {
-              return { ...item, actual: item.actual + points };
-            } else if (action === "remove" && item.actual > 0) {
-              return { ...item, actual: Math.max(0, item.actual - points) };
-            }
-          }
-          
-          return item;
-        });
+        }
         
-        return { ...prev, [projectId]: updatedData };
+        if (item.date === today) {
+          if (action === "complete") {
+            return { ...item, actual: item.actual + points };
+          } else if (action === "remove" && item.actual > 0) {
+            return { ...item, actual: Math.max(0, item.actual - points) };
+          }
+        }
+        
+        return item;
       });
-    } catch (error) {
-      console.error('Error updating burndown data in database:', error);
-    }
+      
+      return { ...prev, [projectId]: updatedData };
+    });
   };
 
   const getBurndownData = (projectId: string) => 
