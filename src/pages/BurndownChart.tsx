@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
@@ -161,14 +160,21 @@ const BurndownChart: React.FC = () => {
       // Calculate ideal burndown - linear decrease over the project timeframe
       const idealRemaining = Math.max(0, totalStoryPoints - (i * (totalStoryPoints / (timeframeDays - 1))));
       
-      // For actual burndown, start with total points and then reduce based on completed tasks
-      // Only reduce for past dates
-      let actualRemaining = totalStoryPoints;
-      const isPastDate = date <= today;
-      
-      if (isPastDate) {
-        actualRemaining = Math.max(0, totalStoryPoints - completedPoints);
+      // Calculate how many story points were completed on or before 'date'
+      let completedByThisDay = 0;
+      for (const sprint of projectSprints) {
+        const tasks = getTasksBySprint(sprint.id);
+        for (const task of tasks) {
+          // Assume we store a 'completedAt' date on each task when it's marked done
+          // If completedAt <= date, count it
+          if (task.status === "done" && task.completedAt && parseISO(task.completedAt) <= date) {
+            completedByThisDay += task.storyPoints || 0;
+          }
+        }
       }
+
+      // actualRemaining is total minus all points done by this date
+      const actualRemaining = Math.max(0, totalStoryPoints - completedByThisDay);
       
       data.push({
         date: dateStr,
