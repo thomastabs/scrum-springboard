@@ -371,7 +371,8 @@ export const fetchBurndownData = async (projectId: string, userId: string): Prom
     return (data || []).map(item => ({
       date: item.date,
       ideal: item.ideal_points,
-      actual: item.actual_points
+      actual: item.actual_points,
+      formattedDate: item.date // This will be formatted in the component
     }));
   } catch (error) {
     console.error('Error fetching burndown data:', error);
@@ -379,18 +380,14 @@ export const fetchBurndownData = async (projectId: string, userId: string): Prom
   }
 };
 
-// New helper to upsert burndown data for a project with improved handling
+// Improved helper to upsert burndown data with better handling
 export const upsertBurndownData = async (
   projectId: string, 
   userId: string,
   burndownData: BurndownDataType[]
 ): Promise<boolean> => {
   try {
-    // Process data in smaller batches to avoid overwhelming the database
-    const batchSize = 5;
-    const batches = [];
-    
-    // Convert our app format to database format
+    // Process all data in a single operation using upsert
     const dbData = burndownData.map(item => ({
       project_id: projectId,
       user_id: userId,
@@ -399,68 +396,21 @@ export const upsertBurndownData = async (
       actual_points: item.actual
     }));
     
-    // Split into batches
-    for (let i = 0; i < dbData.length; i += batchSize) {
-      batches.push(dbData.slice(i, i + batchSize));
+    const { error } = await supabase
+      .from('burndown_data')
+      .upsert(dbData, { 
+        onConflict: 'project_id,user_id,date',
+        ignoreDuplicates: false // We want to update if there's a conflict
+      });
+      
+    if (error) {
+      console.error('Error in burndown data upsert:', error);
+      return false;
     }
     
-    let errorCount = 0;
-    
-    // Process each batch with increased delay between operations
-    for (const batch of batches) {
-      // First try to delete existing entries to avoid conflicts
-      for (const item of batch) {
-        try {
-          await supabase
-            .from('burndown_data')
-            .delete()
-            .eq('project_id', item.project_id)
-            .eq('user_id', item.user_id)
-            .eq('date', item.date);
-            
-          // Small delay between operations
-          await new Promise(resolve => setTimeout(resolve, 50));
-        } catch (e) {
-          // Continue despite errors in delete operations
-          console.log("Delete operation error (non-critical):", e);
-        }
-      }
-      
-      // Try to insert the data
-      for (const item of batch) {
-        try {
-          const { error } = await supabase
-            .from('burndown_data')
-            .insert(item);
-            
-          if (error) {
-            // If error code is duplicate key, it's not critical
-            if (error.code === '23505') {
-              // This is a duplicate key error, expected in some cases
-              console.log("Duplicate key detected (non-critical)");
-            } else {
-              console.warn('Error in individual insert:', error);
-              errorCount++;
-            }
-          }
-          
-          // Small delay between operations
-          await new Promise(resolve => setTimeout(resolve, 50));
-        } catch (e) {
-          console.warn("Insert operation error:", e);
-          errorCount++;
-        }
-      }
-      
-      // Larger delay between batches
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-    
-    // Consider the operation successful if less than 20% of operations failed
-    return errorCount < (dbData.length * 0.2);
+    return true;
   } catch (error) {
     console.error('Error upserting burndown data:', error);
     return false;
   }
 };
-

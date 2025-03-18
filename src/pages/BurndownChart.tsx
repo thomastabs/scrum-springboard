@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
 import { useAuth } from "@/context/AuthContext";
-import { supabase, upsertBurndownData } from "@/lib/supabase";
+import { supabase, fetchBurndownData, upsertBurndownData } from "@/lib/supabase";
 import {
   LineChart,
   Line,
@@ -17,11 +17,6 @@ import {
 import { format, parseISO, startOfDay, addDays, min, max, differenceInDays, isBefore, isAfter } from "date-fns";
 import { toast } from "sonner";
 import { Task } from "@/types";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
 
 interface BurndownDataPoint {
   date: string;
@@ -36,57 +31,82 @@ const BurndownChart: React.FC = () => {
   const { user } = useAuth();
   const [chartData, setChartData] = useState<BurndownDataPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const isUpdatingRef = useRef(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const dataFetchedRef = useRef(false);
   
   const project = getProject(projectId || "");
   
   useEffect(() => {
-    const fetchBurndownData = async () => {
-      if (!projectId || !user || isUpdatingRef.current) return;
-      
+    // Only fetch burndown data once when component mounts
+    // or when project ID changes
+    if (!projectId || !user || dataFetchedRef.current) return;
+    
+    const loadBurndownData = async () => {
       setIsLoading(true);
       try {
-        // Prevent concurrent updates
-        isUpdatingRef.current = true;
+        // Try to load existing data from database first
+        const existingData = await fetchBurndownData(projectId, user.id);
         
-        // Generate burndown data based on current tasks
-        const burndownData = await generateBurndownData();
-        setChartData(burndownData);
-        
-        // Save the data to database (in background)
-        saveBurndownData(burndownData).catch(err => {
-          console.error("Background save error:", err);
-          // Don't display errors to the user for background saves
-        });
+        if (existingData && existingData.length > 0) {
+          // Add formatted date for display
+          const formattedData = existingData.map(item => ({
+            ...item,
+            formattedDate: format(parseISO(item.date), "MMM dd")
+          }));
+          setChartData(formattedData);
+        } else {
+          // Generate new data if none exists
+          await generateAndSaveBurndownData();
+        }
       } catch (error) {
-        console.error("Error fetching burndown data:", error);
-        toast.error("Failed to load burndown chart data");
+        console.error("Error loading burndown data:", error);
+        // If loading fails, fall back to generating new data
+        await generateAndSaveBurndownData();
       } finally {
         setIsLoading(false);
-        setTimeout(() => {
-          isUpdatingRef.current = false;
-        }, 1000); // Add a cooldown period before allowing another update
+        dataFetchedRef.current = true;
       }
     };
     
-    fetchBurndownData();
-    
-    // Cleanup function to ensure we don't have dangling tasks
-    return () => {
-      isUpdatingRef.current = false;
-    };
-  }, [projectId, user, tasks, sprints]);
+    loadBurndownData();
+  }, [projectId, user]);
   
-  const saveBurndownData = async (data: BurndownDataPoint[]): Promise<boolean> => {
-    if (!projectId || !user) return false;
+  // Separate effect to handle task changes after initial load
+  useEffect(() => {
+    // Skip if not loaded yet or currently updating
+    if (!projectId || !user || isLoading || isUpdating || !dataFetchedRef.current) return;
     
+    const updateBurndownData = async () => {
+      try {
+        setIsUpdating(true);
+        await generateAndSaveBurndownData();
+      } catch (error) {
+        console.error("Error updating burndown data:", error);
+      } finally {
+        setIsUpdating(false);
+      }
+    };
+    
+    updateBurndownData();
+  }, [tasks, sprints]);
+  
+  const generateAndSaveBurndownData = async () => {
     try {
-      // We'll update the data in the database, but we won't wait for it
-      // or display errors to the user (to prevent UI flickering)
-      return await upsertBurndownData(projectId, user.id, data);
+      // Generate burndown data based on current tasks
+      const burndownData = await generateBurndownData();
+      setChartData(burndownData);
+      
+      // Save to database
+      const saved = await upsertBurndownData(projectId || "", user?.id || "", burndownData);
+      if (!saved) {
+        console.warn("Failed to save burndown data to database");
+      }
+      
+      return burndownData;
     } catch (error) {
-      console.error("Error saving burndown data (silent):", error);
-      return false;
+      console.error("Error generating burndown data:", error);
+      toast.error("Failed to generate burndown chart data");
+      return [];
     }
   };
   
