@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { Collaborator, BurndownData as BurndownDataType } from '@/types';
 
@@ -398,7 +397,7 @@ export const upsertBurndownData = async (
     const { error } = await supabase
       .from('burndown_data')
       .upsert(dbData, { 
-        onConflict: 'project_id,date',
+        onConflict: 'project_id,user_id,date',
         ignoreDuplicates: false 
       });
       
