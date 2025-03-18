@@ -12,4 +12,3 @@ enable_row_level_security = true
 # Set up foreign key cascades for all tables
 [db]
 allow_cascade_delete = true
-

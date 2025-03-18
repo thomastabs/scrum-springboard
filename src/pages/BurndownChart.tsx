@@ -1,8 +1,9 @@
+
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { supabase, upsertBurndownData } from "@/lib/supabase";
 import {
   LineChart,
   Line,
@@ -35,6 +36,7 @@ const BurndownChart: React.FC = () => {
   const { user } = useAuth();
   const [chartData, setChartData] = useState<BurndownDataPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUpserting, setIsUpserting] = useState(false);
   
   const project = getProject(projectId || "");
   
@@ -59,8 +61,10 @@ const BurndownChart: React.FC = () => {
         // Always regenerate burndown data to keep it current with task status
         burndownData = await generateBurndownData();
         
-        // Save generated data to database
-        await upsertBurndownData(burndownData);
+        // Save generated data to database (only if not already upserting)
+        if (!isUpserting) {
+          await saveBurndownData(burndownData);
+        }
         
         setChartData(burndownData);
       } catch (error) {
@@ -72,12 +76,14 @@ const BurndownChart: React.FC = () => {
     };
     
     fetchBurndownData();
-  }, [projectId, user, tasks, sprints]);
+  }, [projectId, user, tasks, sprints, isUpserting]);
   
-  const upsertBurndownData = async (data: BurndownDataPoint[]) => {
-    if (!projectId || !user) return;
+  const saveBurndownData = async (data: BurndownDataPoint[]) => {
+    if (!projectId || !user || isUpserting) return;
     
     try {
+      setIsUpserting(true);
+      
       // Convert app format to database format
       const dbData = data.map(item => ({
         project_id: projectId,
@@ -87,16 +93,17 @@ const BurndownChart: React.FC = () => {
         actual_points: item.actual
       }));
       
-      const { error } = await supabase
-        .from('burndown_data')
-        .upsert(dbData, { 
-          onConflict: 'project_id,user_id,date',
-          ignoreDuplicates: false 
-        });
-        
-      if (error) throw error;
+      // Use the helper function from supabase.ts
+      const success = await upsertBurndownData(projectId, user.id, data);
+      
+      if (!success) {
+        console.warn("Upsert operation may not have completed successfully");
+      }
     } catch (error) {
       console.error("Error upserting burndown data:", error);
+      // Don't show toast here to avoid multiple error toasts
+    } finally {
+      setIsUpserting(false);
     }
   };
   

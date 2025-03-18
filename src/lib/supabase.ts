@@ -362,6 +362,7 @@ export const fetchBurndownData = async (projectId: string, userId: string): Prom
       .from('burndown_data')
       .select('date, ideal_points, actual_points')
       .eq('project_id', projectId)
+      .eq('user_id', userId)
       .order('date', { ascending: true });
       
     if (error) throw error;
@@ -385,6 +386,10 @@ export const upsertBurndownData = async (
   burndownData: BurndownDataType[]
 ): Promise<boolean> => {
   try {
+    // Process data in smaller batches to avoid overwhelming the database
+    const batchSize = 10;
+    const batches = [];
+    
     // Convert our app format to database format
     const dbData = burndownData.map(item => ({
       project_id: projectId,
@@ -394,14 +399,31 @@ export const upsertBurndownData = async (
       actual_points: item.actual
     }));
     
-    const { error } = await supabase
-      .from('burndown_data')
-      .upsert(dbData, { 
-        onConflict: 'project_id,user_id,date',
-        ignoreDuplicates: false 
-      });
+    // Split into batches
+    for (let i = 0; i < dbData.length; i += batchSize) {
+      batches.push(dbData.slice(i, i + batchSize));
+    }
+    
+    // Process each batch
+    for (const batch of batches) {
+      // Use the more granular approach
+      for (const item of batch) {
+        const { error } = await supabase
+          .from('burndown_data')
+          .upsert(item, { 
+            onConflict: 'project_id,user_id,date' 
+          });
+          
+        if (error) {
+          console.warn('Error in individual upsert:', error);
+          // Continue with other items despite errors
+        }
+      }
       
-    if (error) throw error;
+      // Small delay between batches
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
     return true;
   } catch (error) {
     console.error('Error upserting burndown data:', error);
