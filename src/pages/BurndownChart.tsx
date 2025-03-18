@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
 import { useAuth } from "@/context/AuthContext";
@@ -36,74 +36,57 @@ const BurndownChart: React.FC = () => {
   const { user } = useAuth();
   const [chartData, setChartData] = useState<BurndownDataPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isUpserting, setIsUpserting] = useState(false);
+  const isUpdatingRef = useRef(false);
   
   const project = getProject(projectId || "");
   
   useEffect(() => {
     const fetchBurndownData = async () => {
-      if (!projectId || !user) return;
+      if (!projectId || !user || isUpdatingRef.current) return;
       
       setIsLoading(true);
       try {
-        // Fetch burndown data from Supabase
-        const { data, error } = await supabase
-          .from('burndown_data')
-          .select('*')
-          .eq('project_id', projectId)
-          .eq('user_id', user.id)
-          .order('date', { ascending: true });
-          
-        if (error) throw error;
+        // Prevent concurrent updates
+        isUpdatingRef.current = true;
         
-        let burndownData: BurndownDataPoint[] = [];
-        
-        // Always regenerate burndown data to keep it current with task status
-        burndownData = await generateBurndownData();
-        
-        // Save generated data to database (only if not already upserting)
-        if (!isUpserting) {
-          await saveBurndownData(burndownData);
-        }
-        
+        // Generate burndown data based on current tasks
+        const burndownData = await generateBurndownData();
         setChartData(burndownData);
+        
+        // Save the data to database (in background)
+        saveBurndownData(burndownData).catch(err => {
+          console.error("Background save error:", err);
+          // Don't display errors to the user for background saves
+        });
       } catch (error) {
         console.error("Error fetching burndown data:", error);
         toast.error("Failed to load burndown chart data");
       } finally {
         setIsLoading(false);
+        setTimeout(() => {
+          isUpdatingRef.current = false;
+        }, 1000); // Add a cooldown period before allowing another update
       }
     };
     
     fetchBurndownData();
-  }, [projectId, user, tasks, sprints, isUpserting]);
+    
+    // Cleanup function to ensure we don't have dangling tasks
+    return () => {
+      isUpdatingRef.current = false;
+    };
+  }, [projectId, user, tasks, sprints]);
   
-  const saveBurndownData = async (data: BurndownDataPoint[]) => {
-    if (!projectId || !user || isUpserting) return;
+  const saveBurndownData = async (data: BurndownDataPoint[]): Promise<boolean> => {
+    if (!projectId || !user) return false;
     
     try {
-      setIsUpserting(true);
-      
-      // Convert app format to database format
-      const dbData = data.map(item => ({
-        project_id: projectId,
-        user_id: user.id,
-        date: item.date,
-        ideal_points: item.ideal,
-        actual_points: item.actual
-      }));
-      
-      // Use the helper function from supabase.ts
-      const success = await upsertBurndownData(projectId, user.id, data);
-      
-      if (!success) {
-        console.warn("Upsert operation may not have completed successfully");
-      }
+      // We'll update the data in the database, but we won't wait for it
+      // or display errors to the user (to prevent UI flickering)
+      return await upsertBurndownData(projectId, user.id, data);
     } catch (error) {
-      console.error("Error upserting burndown data:", error);
-      // Don't show toast here to avoid multiple error toasts
-    } finally {
-      setIsUpserting(false);
+      console.error("Error saving burndown data (silent):", error);
+      return false;
     }
   };
   

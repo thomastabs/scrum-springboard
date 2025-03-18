@@ -379,7 +379,7 @@ export const fetchBurndownData = async (projectId: string, userId: string): Prom
   }
 };
 
-// New helper to upsert burndown data for a project
+// New helper to upsert burndown data for a project with improved handling
 export const upsertBurndownData = async (
   projectId: string, 
   userId: string,
@@ -387,7 +387,7 @@ export const upsertBurndownData = async (
 ): Promise<boolean> => {
   try {
     // Process data in smaller batches to avoid overwhelming the database
-    const batchSize = 10;
+    const batchSize = 5;
     const batches = [];
     
     // Convert our app format to database format
@@ -404,29 +404,63 @@ export const upsertBurndownData = async (
       batches.push(dbData.slice(i, i + batchSize));
     }
     
-    // Process each batch
+    let errorCount = 0;
+    
+    // Process each batch with increased delay between operations
     for (const batch of batches) {
-      // Use the more granular approach
+      // First try to delete existing entries to avoid conflicts
       for (const item of batch) {
-        const { error } = await supabase
-          .from('burndown_data')
-          .upsert(item, { 
-            onConflict: 'project_id,user_id,date' 
-          });
-          
-        if (error) {
-          console.warn('Error in individual upsert:', error);
-          // Continue with other items despite errors
+        try {
+          await supabase
+            .from('burndown_data')
+            .delete()
+            .eq('project_id', item.project_id)
+            .eq('user_id', item.user_id)
+            .eq('date', item.date);
+            
+          // Small delay between operations
+          await new Promise(resolve => setTimeout(resolve, 50));
+        } catch (e) {
+          // Continue despite errors in delete operations
+          console.log("Delete operation error (non-critical):", e);
         }
       }
       
-      // Small delay between batches
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Try to insert the data
+      for (const item of batch) {
+        try {
+          const { error } = await supabase
+            .from('burndown_data')
+            .insert(item);
+            
+          if (error) {
+            // If error code is duplicate key, it's not critical
+            if (error.code === '23505') {
+              // This is a duplicate key error, expected in some cases
+              console.log("Duplicate key detected (non-critical)");
+            } else {
+              console.warn('Error in individual insert:', error);
+              errorCount++;
+            }
+          }
+          
+          // Small delay between operations
+          await new Promise(resolve => setTimeout(resolve, 50));
+        } catch (e) {
+          console.warn("Insert operation error:", e);
+          errorCount++;
+        }
+      }
+      
+      // Larger delay between batches
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
     
-    return true;
+    // Consider the operation successful if less than 20% of operations failed
+    return errorCount < (dbData.length * 0.2);
   } catch (error) {
     console.error('Error upserting burndown data:', error);
     return false;
   }
 };
+
