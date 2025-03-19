@@ -393,7 +393,7 @@ export const upsertBurndownData = async (
       user_id: userId,
       date: item.date,
       ideal_points: item.ideal || 0,
-      actual_points: item.actual !== null ? item.actual : 0
+      actual_points: item.actual !== null && item.actual !== undefined ? item.actual : 0
     }));
     
     const { error } = await supabase

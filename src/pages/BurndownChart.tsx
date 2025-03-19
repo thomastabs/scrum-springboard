@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
 import { useAuth } from "@/context/AuthContext";
@@ -15,7 +15,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { format, parseISO, startOfDay, addDays, min, max, differenceInDays, isBefore, isAfter, isToday } from "date-fns";
+import { format, parseISO, startOfDay, addDays, isBefore, isAfter, isToday, differenceInDays } from "date-fns";
 import { toast } from "sonner";
 import { Task } from "@/types";
 
@@ -33,13 +33,14 @@ const BurndownChart: React.FC = () => {
   const [chartData, setChartData] = useState<BurndownDataPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [lastTasksLength, setLastTasksLength] = useState(0);
+  const [lastSprintsLength, setLastSprintsLength] = useState(0);
   const dataFetchedRef = useRef(false);
   
   const project = getProject(projectId || "");
   
+  // Initial data load when component mounts
   useEffect(() => {
-    // Only fetch burndown data once when component mounts
-    // or when project ID changes
     if (!projectId || !user || dataFetchedRef.current) return;
     
     const loadBurndownData = async () => {
@@ -72,17 +73,28 @@ const BurndownChart: React.FC = () => {
     loadBurndownData();
   }, [projectId, user]);
   
-  // Separate effect to handle task changes after initial load
+  // Update data when tasks or sprints change
   useEffect(() => {
-    // Skip if not loaded yet or currently updating
-    if (!projectId || !user || isLoading || isUpdating || !dataFetchedRef.current) return;
+    if (!projectId || !user || isLoading || !dataFetchedRef.current) return;
     
-    const projectSprints = getSprintsByProject(projectId || "");
-    if (projectSprints.length > 0) {
+    const projectSprints = getSprintsByProject(projectId);
+    const currentTasksCount = tasks.filter(t => t.projectId === projectId).length;
+    const currentSprintsCount = projectSprints.length;
+    
+    // Only update if the number of tasks or sprints has changed
+    const shouldUpdate = 
+      currentTasksCount !== lastTasksLength || 
+      currentSprintsCount !== lastSprintsLength;
+    
+    if (shouldUpdate && !isUpdating) {
       const updateBurndownData = async () => {
         try {
           setIsUpdating(true);
           await generateAndSaveBurndownData();
+          
+          // Update the task and sprint counters
+          setLastTasksLength(currentTasksCount);
+          setLastSprintsLength(currentSprintsCount);
         } catch (error) {
           console.error("Error updating burndown data:", error);
         } finally {
@@ -92,16 +104,18 @@ const BurndownChart: React.FC = () => {
       
       updateBurndownData();
     }
-  }, [tasks, sprints]);
+  }, [tasks, sprints, projectId, user, isLoading, lastTasksLength, lastSprintsLength, isUpdating]);
   
   const generateAndSaveBurndownData = async () => {
     try {
+      if (!projectId || !user) return [];
+      
       // Generate burndown data based on current tasks
       const burndownData = await generateBurndownData();
       setChartData(burndownData);
       
       // Save to database
-      const saved = await upsertBurndownData(projectId || "", user?.id || "", burndownData);
+      const saved = await upsertBurndownData(projectId, user.id, burndownData);
       if (!saved) {
         console.warn("Failed to save burndown data to database");
       }
@@ -254,7 +268,7 @@ const BurndownChart: React.FC = () => {
   // Get today's date for reference line
   const todayStr = new Date().toISOString().split('T')[0];
   const todayIndex = chartData.findIndex(d => d.date === todayStr);
-  const todayLabel = todayIndex >= 0 ? chartData[todayIndex].formattedDate : format(new Date(), "MMM dd");
+  const todayLabel = todayIndex >= 0 ? chartData[todayIndex]?.formattedDate : format(new Date(), "MMM dd");
   
   // Find the last actual data point to display a circle marker there
   const lastActualIndex = chartData.reduce((lastIdx, point, idx) => {
@@ -297,17 +311,20 @@ const BurndownChart: React.FC = () => {
             <Tooltip
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
-                  const idealValue = payload[0]?.value;
-                  const actualValue = payload.length > 1 ? payload[1]?.value : null;
+                  // Check for undefined payload values before accessing
+                  const idealValue = payload[0]?.value !== undefined ? payload[0].value : null;
+                  const actualValue = payload.length > 1 && payload[1]?.value !== undefined ? payload[1].value : null;
                   
                   return (
                     <div className="bg-scrum-card border border-scrum-border p-3 rounded">
-                      <p className="font-medium">{payload[0].payload.formattedDate}</p>
+                      <p className="font-medium">{payload[0]?.payload?.formattedDate || ""}</p>
                       <div className="mt-2 space-y-1">
-                        <p className="flex items-center text-sm">
-                          <span className="h-2 w-2 rounded-full bg-[#8884d8] mr-2"></span>
-                          <span>Ideal: {idealValue} points</span>
-                        </p>
+                        {idealValue !== null && (
+                          <p className="flex items-center text-sm">
+                            <span className="h-2 w-2 rounded-full bg-[#8884d8] mr-2"></span>
+                            <span>Ideal: {idealValue} points</span>
+                          </p>
+                        )}
                         {actualValue !== null && (
                           <p className="flex items-center text-sm">
                             <span className="h-2 w-2 rounded-full bg-[#82ca9d] mr-2"></span>
@@ -350,7 +367,7 @@ const BurndownChart: React.FC = () => {
               dot={(props) => {
                 // Only render dots for actual data points (not null)
                 const { cx, cy, payload, index } = props;
-                if (payload.actual === null) return null;
+                if (!payload || payload.actual === null || payload.actual === undefined) return null;
                 
                 // Only show dot for the last actual data point
                 if (index === lastActualIndex) {
