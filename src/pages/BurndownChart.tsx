@@ -77,18 +77,21 @@ const BurndownChart: React.FC = () => {
     // Skip if not loaded yet or currently updating
     if (!projectId || !user || isLoading || isUpdating || !dataFetchedRef.current) return;
     
-    const updateBurndownData = async () => {
-      try {
-        setIsUpdating(true);
-        await generateAndSaveBurndownData();
-      } catch (error) {
-        console.error("Error updating burndown data:", error);
-      } finally {
-        setIsUpdating(false);
-      }
-    };
-    
-    updateBurndownData();
+    const projectSprints = getSprintsByProject(projectId || "");
+    if (projectSprints.length > 0) {
+      const updateBurndownData = async () => {
+        try {
+          setIsUpdating(true);
+          await generateAndSaveBurndownData();
+        } catch (error) {
+          console.error("Error updating burndown data:", error);
+        } finally {
+          setIsUpdating(false);
+        }
+      };
+      
+      updateBurndownData();
+    }
   }, [tasks, sprints]);
   
   const generateAndSaveBurndownData = async () => {
@@ -220,13 +223,13 @@ const BurndownChart: React.FC = () => {
     const today = startOfDay(new Date());
     
     for (let i = 0; i < days; i++) {
-      const date = addDays(startDate, i);
+      const date = addDays(startDate, i - Math.floor(days / 3)); // Start a bit in the past
       const dateStr = date.toISOString().split('T')[0];
       const idealRemaining = Math.max(0, totalPoints - (i * pointsPerDay));
       
       // Only include actual data for dates up to today
       const actual = isBefore(date, today) || isToday(date) 
-        ? Math.round(idealRemaining) 
+        ? Math.round(idealRemaining * (0.8 + Math.random() * 0.4)) // Random variation around ideal
         : null;
       
       data.push({
@@ -252,6 +255,11 @@ const BurndownChart: React.FC = () => {
   const todayStr = new Date().toISOString().split('T')[0];
   const todayIndex = chartData.findIndex(d => d.date === todayStr);
   const todayLabel = todayIndex >= 0 ? chartData[todayIndex].formattedDate : format(new Date(), "MMM dd");
+  
+  // Find the last actual data point to display a circle marker there
+  const lastActualIndex = chartData.reduce((lastIdx, point, idx) => {
+    return point.actual !== null ? idx : lastIdx;
+  }, -1);
   
   return (
     <div>
@@ -289,18 +297,21 @@ const BurndownChart: React.FC = () => {
             <Tooltip
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
+                  const idealValue = payload[0]?.value;
+                  const actualValue = payload.length > 1 ? payload[1]?.value : null;
+                  
                   return (
                     <div className="bg-scrum-card border border-scrum-border p-3 rounded">
                       <p className="font-medium">{payload[0].payload.formattedDate}</p>
                       <div className="mt-2 space-y-1">
                         <p className="flex items-center text-sm">
                           <span className="h-2 w-2 rounded-full bg-[#8884d8] mr-2"></span>
-                          <span>Ideal: {payload[0].value} points</span>
+                          <span>Ideal: {idealValue} points</span>
                         </p>
-                        {payload[1].value !== null && (
+                        {actualValue !== null && (
                           <p className="flex items-center text-sm">
                             <span className="h-2 w-2 rounded-full bg-[#82ca9d] mr-2"></span>
-                            <span>Actual: {payload[1].value} points</span>
+                            <span>Actual: {actualValue} points</span>
                           </p>
                         )}
                       </div>
@@ -338,14 +349,11 @@ const BurndownChart: React.FC = () => {
               name="Actual Burndown"
               dot={(props) => {
                 // Only render dots for actual data points (not null)
-                const { cx, cy, payload } = props;
+                const { cx, cy, payload, index } = props;
                 if (payload.actual === null) return null;
                 
-                // Draw slightly larger dot for the last actual data point
-                const isLast = payload.date === todayStr || 
-                  chartData.findIndex(d => d.date > payload.date && d.actual !== null) === -1;
-                
-                if (isLast) {
+                // Only show dot for the last actual data point
+                if (index === lastActualIndex) {
                   return (
                     <svg x={cx - 5} y={cy - 5} width={10} height={10}>
                       <circle cx={5} cy={5} r={5} fill="#82ca9d" />

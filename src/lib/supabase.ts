@@ -355,7 +355,7 @@ export const fetchCollaborativeBacklogTasks = async (projectId: string) => {
   }
 };
 
-// New helper to fetch burndown data for a project
+// Helper function to fetch burndown data for a project
 export const fetchBurndownData = async (projectId: string, userId: string): Promise<BurndownDataType[]> => {
   try {
     const { data, error } = await supabase
@@ -392,8 +392,8 @@ export const upsertBurndownData = async (
       project_id: projectId,
       user_id: userId,
       date: item.date,
-      ideal_points: item.ideal,
-      actual_points: item.actual
+      ideal_points: item.ideal || 0,
+      actual_points: item.actual !== null ? item.actual : 0
     }));
     
     const { error } = await supabase
