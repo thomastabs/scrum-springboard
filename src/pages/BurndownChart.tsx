@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
@@ -39,30 +38,25 @@ const BurndownChart: React.FC = () => {
   
   const project = getProject(projectId || "");
   
-  // Initial data load when component mounts
   useEffect(() => {
     if (!projectId || !user || dataFetchedRef.current) return;
     
     const loadBurndownData = async () => {
       setIsLoading(true);
       try {
-        // Try to load existing data from database first
         const existingData = await fetchBurndownData(projectId, user.id);
         
         if (existingData && existingData.length > 0) {
-          // Add formatted date for display
           const formattedData = existingData.map(item => ({
             ...item,
             formattedDate: format(parseISO(item.date), "MMM dd")
           }));
           setChartData(formattedData);
         } else {
-          // Generate new data if none exists
           await generateAndSaveBurndownData();
         }
       } catch (error) {
         console.error("Error loading burndown data:", error);
-        // If loading fails, fall back to generating new data
         await generateAndSaveBurndownData();
       } finally {
         setIsLoading(false);
@@ -73,7 +67,6 @@ const BurndownChart: React.FC = () => {
     loadBurndownData();
   }, [projectId, user]);
   
-  // Update data when tasks or sprints change
   useEffect(() => {
     if (!projectId || !user || isLoading || !dataFetchedRef.current) return;
     
@@ -81,7 +74,6 @@ const BurndownChart: React.FC = () => {
     const currentTasksCount = tasks.filter(t => t.projectId === projectId).length;
     const currentSprintsCount = projectSprints.length;
     
-    // Only update if the number of tasks or sprints has changed
     const shouldUpdate = 
       currentTasksCount !== lastTasksLength || 
       currentSprintsCount !== lastSprintsLength;
@@ -92,7 +84,6 @@ const BurndownChart: React.FC = () => {
           setIsUpdating(true);
           await generateAndSaveBurndownData();
           
-          // Update the task and sprint counters
           setLastTasksLength(currentTasksCount);
           setLastSprintsLength(currentSprintsCount);
         } catch (error) {
@@ -110,11 +101,9 @@ const BurndownChart: React.FC = () => {
     try {
       if (!projectId || !user) return [];
       
-      // Generate burndown data based on current tasks
       const burndownData = await generateBurndownData();
       setChartData(burndownData);
       
-      // Save to database
       const saved = await upsertBurndownData(projectId, user.id, burndownData);
       if (!saved) {
         console.warn("Failed to save burndown data to database");
@@ -132,15 +121,12 @@ const BurndownChart: React.FC = () => {
     const data: BurndownDataPoint[] = [];
     const today = startOfDay(new Date());
     
-    // Get all sprints for the project
     const projectSprints = getSprintsByProject(projectId || "");
     
     if (projectSprints.length === 0) {
-      // If no sprints exist, use default 21-day range
       return generateDefaultTimeframe(today, 21);
     }
     
-    // Find earliest sprint start date and latest sprint end date
     let earliestStartDate: Date | null = null;
     let latestEndDate: Date | null = null;
     
@@ -157,38 +143,29 @@ const BurndownChart: React.FC = () => {
       }
     }
     
-    // Ensure we have valid dates
     if (!earliestStartDate || !latestEndDate) {
       return generateDefaultTimeframe(today, 21);
     }
     
-    // Calculate days between earliest and latest dates
     const daysInProject = differenceInDays(latestEndDate, earliestStartDate) + 1;
-    
-    // Ensure we have at least 7 days for visibility
     const timeframeDays = Math.max(daysInProject, 7);
     
-    // Get all tasks across all sprints
     const allTasks: Task[] = [];
     for (const sprint of projectSprints) {
       const sprintTasks = getTasksBySprint(sprint.id);
       allTasks.push(...sprintTasks);
     }
     
-    // Calculate total story points across all tasks
     const totalStoryPoints = allTasks.reduce((sum, task) => {
       return sum + (task.storyPoints || 0);
     }, 0);
     
-    // If no story points, set a default value
     if (totalStoryPoints === 0) {
       return generateDefaultTimeframe(today, timeframeDays);
     }
     
-    // Create a map to track completed tasks by date
     const completedTasksByDate = new Map<string, number>();
     
-    // Populate the map with completed tasks
     allTasks.forEach(task => {
       if (task.status === "done" && task.updatedAt && task.storyPoints) {
         const completionDate = task.updatedAt.split('T')[0];
@@ -197,7 +174,6 @@ const BurndownChart: React.FC = () => {
       }
     });
     
-    // Generate data points for each day in the project timeframe
     let remainingPoints = totalStoryPoints;
     let actualRemainingPoints = totalStoryPoints;
     const pointsPerDay = totalStoryPoints / timeframeDays;
@@ -207,10 +183,8 @@ const BurndownChart: React.FC = () => {
       const dateStr = date.toISOString().split('T')[0];
       const formattedDate = format(date, "MMM dd");
       
-      // Calculate ideal burndown - linear decrease over the project timeframe
       const idealRemaining = Math.max(0, totalStoryPoints - (i * pointsPerDay));
       
-      // For past dates, reduce actual points based on completed tasks
       let actualPoints: number | null = null;
       
       if (isBefore(date, today) || isToday(date)) {
@@ -237,13 +211,12 @@ const BurndownChart: React.FC = () => {
     const today = startOfDay(new Date());
     
     for (let i = 0; i < days; i++) {
-      const date = addDays(startDate, i - Math.floor(days / 3)); // Start a bit in the past
+      const date = addDays(startDate, i - Math.floor(days / 3));
       const dateStr = date.toISOString().split('T')[0];
       const idealRemaining = Math.max(0, totalPoints - (i * pointsPerDay));
       
-      // Only include actual data for dates up to today
       const actual = isBefore(date, today) || isToday(date) 
-        ? Math.round(idealRemaining * (0.8 + Math.random() * 0.4)) // Random variation around ideal
+        ? Math.round(idealRemaining * (0.8 + Math.random() * 0.4))
         : null;
       
       data.push({
@@ -265,12 +238,10 @@ const BurndownChart: React.FC = () => {
     );
   }
   
-  // Get today's date for reference line
   const todayStr = new Date().toISOString().split('T')[0];
   const todayIndex = chartData.findIndex(d => d.date === todayStr);
   const todayLabel = todayIndex >= 0 ? chartData[todayIndex]?.formattedDate : format(new Date(), "MMM dd");
   
-  // Find the last actual data point to display a circle marker there
   const lastActualIndex = chartData.reduce((lastIdx, point, idx) => {
     return point.actual !== null ? idx : lastIdx;
   }, -1);
@@ -311,7 +282,6 @@ const BurndownChart: React.FC = () => {
             <Tooltip
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
-                  // Check for undefined payload values before accessing
                   const idealValue = payload[0]?.value !== undefined ? payload[0].value : null;
                   const actualValue = payload.length > 1 && payload[1]?.value !== undefined ? payload[1].value : null;
                   
@@ -343,12 +313,17 @@ const BurndownChart: React.FC = () => {
             />
             <ReferenceLine 
               x={todayLabel} 
-              stroke="#ccc" 
-              strokeDasharray="3 3" 
+              stroke="#ea384c" 
+              strokeWidth={2}
+              strokeDasharray="5 3" 
               label={{ 
-                value: "Today", 
+                value: "TODAY", 
                 position: "top", 
-                fill: "#ccc" 
+                fill: "#ea384c",
+                fontSize: 12,
+                fontWeight: "bold",
+                backgroundColor: "#333",
+                padding: 5
               }} 
             />
             <Line
@@ -365,11 +340,9 @@ const BurndownChart: React.FC = () => {
               stroke="#82ca9d"
               name="Actual Burndown"
               dot={(props) => {
-                // Only render dots for actual data points (not null)
                 const { cx, cy, payload, index } = props;
                 if (!payload || payload.actual === null || payload.actual === undefined) return null;
                 
-                // Only show dot for the last actual data point
                 if (index === lastActualIndex) {
                   return (
                     <svg x={cx - 5} y={cy - 5} width={10} height={10}>
@@ -401,6 +374,9 @@ const BurndownChart: React.FC = () => {
           </li>
           <li>
             When the Actual line is <strong>below</strong> the Ideal line, the project is <strong>ahead of schedule</strong>.
+          </li>
+          <li>
+            The <strong style={{ color: "#ea384c" }}>TODAY</strong> line marks the current date on the timeline.
           </li>
         </ul>
       </div>
