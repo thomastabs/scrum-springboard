@@ -13,15 +13,16 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
-import { format, parseISO, startOfDay, addDays, min, max, differenceInDays, isBefore, isAfter } from "date-fns";
+import { format, parseISO, startOfDay, addDays, min, max, differenceInDays, isBefore, isAfter, isToday } from "date-fns";
 import { toast } from "sonner";
 import { Task } from "@/types";
 
 interface BurndownDataPoint {
   date: string;
   ideal: number;
-  actual: number;
+  actual: number | null;
   formattedDate: string;
 }
 
@@ -193,15 +194,18 @@ const BurndownChart: React.FC = () => {
       const idealRemaining = Math.max(0, totalStoryPoints - (i * pointsPerDay));
       
       // For past dates, reduce actual points based on completed tasks
-      if (isBefore(date, today) || date.getTime() === today.getTime()) {
+      let actualPoints: number | null = null;
+      
+      if (isBefore(date, today) || isToday(date)) {
         const completedPoints = completedTasksByDate.get(dateStr) || 0;
         actualRemainingPoints = Math.max(0, actualRemainingPoints - completedPoints);
+        actualPoints = actualRemainingPoints;
       }
       
       data.push({
         date: dateStr,
         ideal: Math.round(idealRemaining),
-        actual: Math.round(actualRemainingPoints),
+        actual: actualPoints,
         formattedDate
       });
     }
@@ -213,16 +217,22 @@ const BurndownChart: React.FC = () => {
     const data: BurndownDataPoint[] = [];
     const totalPoints = 100;
     const pointsPerDay = totalPoints / days;
+    const today = startOfDay(new Date());
     
     for (let i = 0; i < days; i++) {
       const date = addDays(startDate, i);
       const dateStr = date.toISOString().split('T')[0];
       const idealRemaining = Math.max(0, totalPoints - (i * pointsPerDay));
       
+      // Only include actual data for dates up to today
+      const actual = isBefore(date, today) || isToday(date) 
+        ? Math.round(idealRemaining) 
+        : null;
+      
       data.push({
         date: dateStr,
         ideal: Math.round(idealRemaining),
-        actual: Math.round(idealRemaining), // Start with ideal for default
+        actual: actual,
         formattedDate: format(date, "MMM dd"),
       });
     }
@@ -237,6 +247,11 @@ const BurndownChart: React.FC = () => {
       </div>
     );
   }
+  
+  // Get today's date for reference line
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayIndex = chartData.findIndex(d => d.date === todayStr);
+  const todayLabel = todayIndex >= 0 ? chartData[todayIndex].formattedDate : format(new Date(), "MMM dd");
   
   return (
     <div>
@@ -282,10 +297,12 @@ const BurndownChart: React.FC = () => {
                           <span className="h-2 w-2 rounded-full bg-[#8884d8] mr-2"></span>
                           <span>Ideal: {payload[0].value} points</span>
                         </p>
-                        <p className="flex items-center text-sm">
-                          <span className="h-2 w-2 rounded-full bg-[#82ca9d] mr-2"></span>
-                          <span>Actual: {payload[1].value} points</span>
-                        </p>
+                        {payload[1].value !== null && (
+                          <p className="flex items-center text-sm">
+                            <span className="h-2 w-2 rounded-full bg-[#82ca9d] mr-2"></span>
+                            <span>Actual: {payload[1].value} points</span>
+                          </p>
+                        )}
                       </div>
                     </div>
                   );
@@ -295,6 +312,16 @@ const BurndownChart: React.FC = () => {
             />
             <Legend
               wrapperStyle={{ color: "#fff" }}
+            />
+            <ReferenceLine 
+              x={todayLabel} 
+              stroke="#ccc" 
+              strokeDasharray="3 3" 
+              label={{ 
+                value: "Today", 
+                position: "top", 
+                fill: "#ccc" 
+              }} 
             />
             <Line
               type="monotone"
@@ -309,8 +336,27 @@ const BurndownChart: React.FC = () => {
               dataKey="actual"
               stroke="#82ca9d"
               name="Actual Burndown"
-              dot={false}
+              dot={(props) => {
+                // Only render dots for actual data points (not null)
+                const { cx, cy, payload } = props;
+                if (payload.actual === null) return null;
+                
+                // Draw slightly larger dot for the last actual data point
+                const isLast = payload.date === todayStr || 
+                  chartData.findIndex(d => d.date > payload.date && d.actual !== null) === -1;
+                
+                if (isLast) {
+                  return (
+                    <svg x={cx - 5} y={cy - 5} width={10} height={10}>
+                      <circle cx={5} cy={5} r={5} fill="#82ca9d" />
+                    </svg>
+                  );
+                }
+                
+                return null;
+              }}
               activeDot={{ r: 8 }}
+              connectNulls={false}
             />
           </LineChart>
         </ResponsiveContainer>
