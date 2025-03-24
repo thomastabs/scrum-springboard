@@ -15,7 +15,7 @@ interface ChatMessage {
   message: string;
   userId: string;
   username: string;
-  createdAt: string;    
+  createdAt: string;
 }
 
 const ProjectTeam: React.FC = () => {
