@@ -514,14 +514,19 @@ export const sendProjectChatMessage = async (projectId: string, userId: string, 
 // Helper function to fetch project chat messages
 export const fetchProjectChatMessages = async (projectId: string) => {
   try {
-    // Fix: Don't prefix column names with table names in the filter
+    console.log('Fetching chat messages for project:', projectId);
     const { data, error } = await supabase
       .from('chat_messages')
       .select('id, message, user_id, username, created_at')
       .eq('project_id', projectId)
       .order('created_at', { ascending: true });
       
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching chat messages:', error);
+      throw error;
+    }
+    
+    console.log('Chat messages fetched:', data);
     return data || [];
   } catch (error) {
     console.error('Error fetching project chat messages:', error);
