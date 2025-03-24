@@ -37,7 +37,7 @@ export const fetchProjectChatMessages = async (projectId: string) => {
     const { data, error } = await supabase
       .from('chat_messages')
       .select('id, message, user_id, username, created_at')
-      .eq('project_id', projectId)
+      .eq('chat_messages.project_id', projectId) // Explicitly reference the table name
       .order('created_at', { ascending: true });
       
     if (error) {
