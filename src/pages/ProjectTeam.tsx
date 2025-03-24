@@ -2,14 +2,13 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
 import { useAuth } from "@/context/AuthContext";
-import { fetchProjectCollaborators, fetchProjectChatMessages, sendProjectChatMessage } from "@/lib/supabase";
+import { fetchProjectCollaborators, fetchProjectChatMessages, sendProjectChatMessage } from "@/lib/supabase/chat";
 import { Users, Mail, SendHorizontal } from "lucide-react";
 import { Collaborator } from "@/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
-// Interface for chat messages
 interface ChatMessage {
   id: string;
   message: string;
