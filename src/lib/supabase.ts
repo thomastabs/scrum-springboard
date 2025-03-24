@@ -144,7 +144,7 @@ export const findUserByEmailOrUsername = async (emailOrUsername: string) => {
 };
 
 // Helper function to add a collaborator to a project
-export const addCollaborator = async (projectId: string, userId: string, role: 'viewer' | 'member' | 'admin') => {
+export const addCollaborator = async (projectId: string, userId: string, role: 'product_owner' | 'team_member' | 'scrum_master') => {
   try {
     const { data, error } = await supabase
       .from('collaborators')
@@ -214,7 +214,7 @@ export const removeCollaborator = async (collaboratorId: string) => {
 };
 
 // Helper function to update a collaborator's role
-export const updateCollaboratorRole = async (collaboratorId: string, role: 'viewer' | 'member' | 'admin') => {
+export const updateCollaboratorRole = async (collaboratorId: string, role: 'product_owner' | 'team_member' | 'scrum_master') => {
   try {
     const { error } = await supabase
       .from('collaborators')
@@ -412,5 +412,119 @@ export const upsertBurndownData = async (
   } catch (error) {
     console.error('Error upserting burndown data:', error);
     return false;
+  }
+};
+
+// Helper function to update a task with completion date - IMPROVED PERSISTENCE
+export const updateTaskWithCompletionDate = async (taskId: string, data: {
+  title?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  story_points?: number;
+  assign_to?: string;
+  completion_date?: string | null;
+}) => {
+  try {
+    return await withRetry(async () => {
+      console.log("Updating task with completion date - Initial data:", JSON.stringify(data));
+      
+      // Get the current task data first
+      const { data: existingTask, error: fetchError } = await supabase
+        .from('tasks')
+        .select('status, completion_date')
+        .eq('id', taskId)
+        .single();
+        
+      if (fetchError) {
+        console.error('Error fetching existing task data:', fetchError);
+        throw fetchError;
+      }
+      
+      console.log("Existing task data:", JSON.stringify(existingTask));
+      
+      let updateData = { ...data };
+      
+      // Handle completion date logic:
+      // 1. If explicitly provided in update (even if null), use the new value
+      // 2. If changing to "done" status and no completion date exists, set to today
+      // 3. If task already has a completion date, preserve it
+      if ('completion_date' in data) {
+        // Case 1: Use explicitly provided completion date (even if null)
+        console.log(`Setting completion date to provided value: ${data.completion_date}`);
+        updateData.completion_date = data.completion_date;
+      } else if (data.status === 'done' && (!existingTask.completion_date || existingTask.status !== 'done')) {
+        // Case 2: Changing to done status without completion date - set to today
+        const todayDate = new Date().toISOString().split('T')[0];
+        console.log(`Setting completion date to today: ${todayDate}`);
+        updateData.completion_date = todayDate;
+      } else if (existingTask.completion_date && !('completion_date' in data)) {
+        // Case 3: Preserve existing completion date if it exists and not explicitly trying to change it
+        console.log(`Preserving existing completion date: ${existingTask.completion_date}`);
+        updateData.completion_date = existingTask.completion_date;
+      }
+      
+      console.log('Final update data:', JSON.stringify(updateData));
+      
+      const { data: updatedTask, error } = await supabase
+        .from('tasks')
+        .update(updateData)
+        .eq('id', taskId)
+        .select()
+        .single();
+        
+      if (error) throw error;
+      return updatedTask;
+    });
+  } catch (error) {
+    console.error('Error updating task with completion date:', error);
+    throw error;
+  }
+};
+
+// Helper function to send a project chat message using the database function
+export const sendProjectChatMessage = async (projectId: string, userId: string, username: string, message: string) => {
+  try {
+    console.log('Sending chat message:', { projectId, userId, username, message });
+    
+    // Use the database function we created
+    const { data, error } = await supabase.rpc(
+      'insert_chat_message',
+      {
+        p_project_id: projectId,
+        p_user_id: userId,
+        p_username: username,
+        p_message: message
+      }
+    );
+      
+    if (error) {
+      console.error('Error in sendProjectChatMessage:', error);
+      throw error;
+    }
+    
+    console.log('Chat message sent successfully:', data);
+    return data;
+  } catch (error) {
+    console.error('Error sending project chat message:', error);
+    throw error;
+  }
+};
+
+// Helper function to fetch project chat messages
+export const fetchProjectChatMessages = async (projectId: string) => {
+  try {
+    // Fix: Be explicit with column names and table names to avoid ambiguity
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('id, message, user_id, username, created_at')
+      .eq('chat_messages.project_id', projectId)
+      .order('created_at', { ascending: true });
+      
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching project chat messages:', error);
+    return [];
   }
 };
