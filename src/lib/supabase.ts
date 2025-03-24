@@ -514,11 +514,11 @@ export const sendProjectChatMessage = async (projectId: string, userId: string, 
 // Helper function to fetch project chat messages
 export const fetchProjectChatMessages = async (projectId: string) => {
   try {
-    // Fix: Be explicit with column names and table names to avoid ambiguity
+    // Fix: Don't prefix column names with table names in the filter
     const { data, error } = await supabase
       .from('chat_messages')
       .select('id, message, user_id, username, created_at')
-      .eq('chat_messages.project_id', projectId)
+      .eq('project_id', projectId)
       .order('created_at', { ascending: true });
       
     if (error) throw error;
