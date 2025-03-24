@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
 import { useAuth } from "@/context/AuthContext";
-import { fetchProjectCollaborators, sendProjectChatMessage } from "@/lib/supabase";
+import { fetchProjectCollaborators, fetchProjectChatMessages, sendProjectChatMessage } from "@/lib/supabase";
 import { Users, Mail, SendHorizontal } from "lucide-react";
 import { Collaborator } from "@/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -63,15 +63,9 @@ const ProjectTeam: React.FC = () => {
     
     const loadChatMessages = async () => {
       try {
-        const { data, error } = await supabase
-          .from('chat_messages')
-          .select('id, message, user_id, username, created_at')
-          .eq('chat_messages.project_id', projectId)
-          .order('created_at', { ascending: true });
-          
-        if (error) throw error;
+        const messages = await fetchProjectChatMessages(projectId);
         
-        const formattedMessages: ChatMessage[] = (data || []).map(msg => ({
+        const formattedMessages: ChatMessage[] = messages.map(msg => ({
           id: msg.id,
           message: msg.message,
           userId: msg.user_id,
@@ -94,7 +88,7 @@ const ProjectTeam: React.FC = () => {
         event: 'INSERT',
         schema: 'public',
         table: 'chat_messages',
-        filter: `chat_messages.project_id=eq.${projectId}`
+        filter: `project_id=eq.${projectId}`
       }, (payload) => {
         console.log('New message received:', payload);
         const newMsg = payload.new as any;
