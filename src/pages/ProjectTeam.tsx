@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useProjects } from "@/context/ProjectContext";
 import { useAuth } from "@/context/AuthContext";
-import { fetchProjectCollaborators } from "@/lib/supabase";
+import { fetchProjectCollaborators } from "@/lib/supabase/collaborators";
 import { Users, Mail, ChevronDown, CheckCircle, Clock, Star } from "lucide-react";
 import { Collaborator, Task } from "@/types";
 import { 
@@ -89,10 +88,10 @@ const ProjectTeam: React.FC = () => {
       completedStoryPoints: number
     }> = {};
     
-    // Initialize stats for owner if available
+    // Initialize stats for owner and collaborators only
     if (owner) {
-      tasksByUser[owner.id] = [];
-      statsByUser[owner.id] = {
+      tasksByUser[owner.username] = [];
+      statsByUser[owner.username] = {
         assignedTasks: 0,
         completedTasks: 0,
         totalStoryPoints: 0,
@@ -102,8 +101,8 @@ const ProjectTeam: React.FC = () => {
     
     // Initialize stats for all collaborators
     collaborators.forEach(collab => {
-      tasksByUser[collab.userId] = [];
-      statsByUser[collab.userId] = {
+      tasksByUser[collab.username] = [];
+      statsByUser[collab.username] = {
         assignedTasks: 0,
         completedTasks: 0,
         totalStoryPoints: 0,
@@ -111,36 +110,25 @@ const ProjectTeam: React.FC = () => {
       };
     });
     
-    // Process all tasks
+    // Process all tasks - Only map tasks that belong to collaborators or owner
     projectTasks.forEach(task => {
       if (!task.assignedTo) return;
       
-      console.log(`Processing task ${task.id} assigned to ${task.assignedTo}`);
-      
-      // Check if this user exists in our mapping
-      if (!tasksByUser[task.assignedTo]) {
-        console.log(`Creating new entry for user ${task.assignedTo}`);
-        tasksByUser[task.assignedTo] = [];
-        statsByUser[task.assignedTo] = {
-          assignedTasks: 0,
-          completedTasks: 0,
-          totalStoryPoints: 0,
-          completedStoryPoints: 0
-        };
-      }
-      
-      // Add task to user's task list
-      tasksByUser[task.assignedTo].push(task);
-      
-      // Update stats
-      const storyPoints = task.storyPoints || 0;
-      statsByUser[task.assignedTo].totalStoryPoints += storyPoints;
-      
-      if (task.status === 'done') {
-        statsByUser[task.assignedTo].completedTasks++;
-        statsByUser[task.assignedTo].completedStoryPoints += storyPoints;
-      } else {
-        statsByUser[task.assignedTo].assignedTasks++;
+      // Check if this user exists in our tasksByUser mapping (which means they're a team member)
+      if (tasksByUser[task.assignedTo]) {
+        // Add task to user's task list
+        tasksByUser[task.assignedTo].push(task);
+        
+        // Update stats
+        const storyPoints = task.storyPoints || 0;
+        statsByUser[task.assignedTo].totalStoryPoints += storyPoints;
+        
+        if (task.status === 'done') {
+          statsByUser[task.assignedTo].completedTasks++;
+          statsByUser[task.assignedTo].completedStoryPoints += storyPoints;
+        } else {
+          statsByUser[task.assignedTo].assignedTasks++;
+        }
       }
     });
     
@@ -150,14 +138,6 @@ const ProjectTeam: React.FC = () => {
     setUserTasks(tasksByUser);
     setUserStats(statsByUser);
   }, [projectId, tasks, collaborators, owner, getSprintsByProject]);
-  
-  if (isLoading) {
-    return (
-      <div className="text-center py-8">
-        <div className="animate-pulse">Loading team information...</div>
-      </div>
-    );
-  }
   
   const getRoleBadgeClass = (role: string) => {
     switch(role) {
@@ -265,7 +245,7 @@ const ProjectTeam: React.FC = () => {
                 <div className="text-xs px-2 py-1 rounded-full inline-block bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 mt-1">
                   Owner
                 </div>
-                {renderUserStats(owner.id)}
+                {renderUserStats(owner.username)}
               </div>
             </div>
           ) : (
@@ -295,7 +275,7 @@ const ProjectTeam: React.FC = () => {
                        collab.role === 'product_owner' ? 'Product Owner' : 
                        'Team Member'}
                     </div>
-                    {renderUserStats(collab.userId)}
+                    {renderUserStats(collab.username)}
                   </div>
                 </div>
               ))}
