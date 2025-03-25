@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import NavLink from "@/components/ui/NavLink";
 import { ArrowLeft, LayoutGrid, List, LineChart, Edit, Trash, Package, Users } from "lucide-react";
 import { toast } from "sonner";
-import { fetchProjectCollaborators } from "@/lib/supabase/collaborators";
+import { fetchProjectCollaborators } from "@/lib/supabase";
 import { Collaborator, ProjectRole } from "@/types";
 
 const ProjectLayout: React.FC = () => {
@@ -99,10 +99,13 @@ const ProjectLayout: React.FC = () => {
     }
   };
   
+  // Only project owners and scrum masters can edit the project
   const canEditProject = isOwner || userRole === 'scrum_master';
   
+  // Scrum Masters, Team Members and Product Owners can access backlog
   const canAccessBacklog = isOwner || userRole === 'scrum_master' || userRole === 'team_member' || userRole === 'product_owner';
   
+  // Only owners and scrum masters can modify sprints
   const canModifySprints = isOwner || userRole === 'scrum_master';
   
   const handleBackToProjects = () => {
@@ -113,8 +116,10 @@ const ProjectLayout: React.FC = () => {
     }
   };
 
+  // Check if we're on the edit page
   const isEditPage = location.pathname.endsWith('/edit');
   
+  // If we're on the edit page, just render the outlet
   if (isEditPage) {
     return <Outlet />;
   }

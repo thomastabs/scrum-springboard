@@ -39,15 +39,11 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   projectId?: string;
-  completionDate?: string; // Application field name
-  // Database field names
+  completionDate?: string; // New field to track when a task was completed
+  // Database field name versions
   story_points?: number;
   assign_to?: string;
-  completion_date?: string; // Database field name
-  sprint_id?: string; // Added to ensure we have both forms
-  project_id?: string; // Added to ensure we have both forms
-  created_at?: string; // Added to ensure we have both forms
-  updated_at?: string; // Added to ensure we have both forms
+  completion_date?: string; // Database field name version
 }
 
 export interface BurndownData {
